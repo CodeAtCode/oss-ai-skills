@@ -1,7 +1,7 @@
 # OSS AI Skills Collection
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0)
 
-A comprehensive collection of AI assistant skills (SKILL.md files) following the [skillreg.dev](https://skillreg.dev/docs/skill-md-reference) specification, designed to help contribute to and extend open-source projects (for plugins).
+A comprehensive collection of AI assistant skills (SKILL.md files) following the [skillreg.dev](https://skillreg.dev/docs/skill-md-reference) specification, designed to help to use and extend open-source projects (for plugins).
 *Note: we test the majority of them and improving based on asking to the agents to extend the skills based on their experience.*
 
 ## What is this?
@@ -9,12 +9,6 @@ A comprehensive collection of AI assistant skills (SKILL.md files) following the
 This repository provides reusable skill definitions that can be loaded into AI coding assistants. Each skill encapsulates domain knowledge, best practices, and workflows for specific tasks in open-source development.
 
 ## Available Skills
-
-### Contribute
-
-| Skill | Description | Lines | Tags |
-|-------|-------------|-------|------|
-| [WordPress](contribute/wordpress/SKILL.md) | Contribute to WordPress core - hooks system, coding standards, database API, REST API, testing, Trac workflow | 1,387 | wordpress, php, cms, open-source, core-contribution |
 
 ### Extend
 
@@ -40,7 +34,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [android-apk-patch](frameworks/android-apk-patch/SKILL.md) | Modify, repackage, test Android APKs - split APK handling, GApps workarounds, signing, Frida instrumentation, redroid/Waydroid testing | 1,548 | android, apk, patching, smali, signing, split-apk, gapps, frida, redroid, waydroid |
 | [BPCore Engine](frameworks/bpcore-engine/SKILL.md) | Lua game framework for GBA - sprites, entities, collision, audio, multiplayer | ~1,100 | lua, gba, game-engine, gameboy-advance |
 | [Celery](frameworks/celery/SKILL.md) | Distributed task queue - Redis/RabbitMQ brokers, periodic tasks, Django integration | 1,250 | python, task-queue, async, distributed, celery |
-| [Django](frameworks/django/SKILL.md) | Web applications - ORM, views, DRF, middleware, caching, async views, deployment, security, Django 6.0 | 1,499 | python, django, web-framework, orm, rest-api, drf, async, hub |
+| [Django (Security)](frameworks/django-security/SKILL.md) | CSRF protection, authentication, sessions, login/logout, password handling, middleware, protected views | 1,499 | python, django, web-framework, async, hub |
 | [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,503 | python, django, bolt, api, rust, performance, async |
 | [Django Celery](frameworks/django-celery/SKILL.md) | Django Celery integration - distributed tasks, django-celery-beat scheduling, monitoring | ~700 | python, django, celery, task-queue, periodic-tasks, django-celery-beat |
 | [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, template tags, middleware, CSRF protection | 415 | django, htmx, python, web, frontend, partial-rendering |
