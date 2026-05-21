@@ -39,18 +39,70 @@ anomalyco/opencode/
 │   └── util/              # Shared utilities
 ```
 
-### Extension Points
+### Extension Types - When to Use What
 
-1. **Tools**: Functions the AI can call to perform actions
-2. **MCP Servers**: External services exposing tools via MCP protocol
-3. **Skills**: Prompt templates and knowledge (SKILL.md files)
-4. **Commands**: Custom slash commands
-5. **Providers**: Custom LLM provider integrations
+| Extension Type | Best For | Example Use Case |
+|----------------|----------|------------------|
+| **Tools** | AI-triggered actions | Search files, read/write data, execute code |
+| **MCP Servers** | External service integrations | Connect to databases, GitHub, filesystem |
+| **Skills** | Knowledge/prompt templates | Coding patterns, best practices, frameworks |
+| **Commands** | Interactive shortcuts | `/hello`, `/search`, custom slash commands |
+| **Providers** | Custom LLM backends | Alternative API providers, custom models |
 
-## Plugin System
+### Repository Structure
+### Prerequisites
+
+Before developing OpenCode plugins, ensure you have:
+
+**Required Software:**
+- Node.js 18+ OR Bun 1.0+
+- TypeScript 5.0+ (recommended)
+
+**Development Environment:**
+- Basic TypeScript knowledge (interfaces, async/await, type inference)
+- Familiarity with package.json and npm/yarn/bun
+- Basic understanding of HTTP APIs
 
 ### Plugin Package (@opencode-ai/plugin)
+### Hello World Plugin Example
 
+This is the simplest possible plugin to get started:
+
+```typescript
+// hello-world-plugin/index.ts
+import { Plugin, Tool } from '@opencode-ai/plugin'
+
+const helloWorldTool: Tool = {
+  name: 'greet_user',
+  description: 'Greet a user by name',
+  parameters: {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Name to greet'
+      }
+    },
+    required: ['name']
+  },
+  execute: async (args, context) => {
+    return {
+      content: `Hello, ${args.name}! Welcome to OpenCode.`
+    }
+  }
+}
+
+const plugin: Plugin = {
+  name: 'hello-world',
+  version: '1.0.0',
+  description: 'A simple greeting plugin',
+  tools: [helloWorldTool]
+}
+
+export default plugin
+```
+
+### Plugin Package (@opencode-ai/plugin)
 ```typescript
 // packages/plugin/src/index.ts
 export interface Plugin {
@@ -107,9 +159,69 @@ const myPlugin: Plugin = {
           }
         },
         required: ['input']
-      },
-      execute: async (args, context) => {
-        // Tool implementation
+### Error Handling
+
+```typescript
+const robustTool: Tool = {
+  name: 'safe_tool',
+  description: 'Tool with proper error handling',
+  parameters: { ... },
+  execute: async (args, context) => {
+    try {
+      // Validate args
+      if (!args.required) {
+        return {
+          content: 'Error: Required parameter missing',
+          isError: true
+        }
+      }
+      
+      // Execute with timeout
+      const result = await Promise.race([
+        doWork(args),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 30000)
+        )
+      ])
+      
+      return { content: result }
+    } catch (error) {
+      return {
+        content: `Error: ${error.message}`,
+        isError: true
+      }
+    }
+  }
+}
+```
+
+#### Troubleshooting
+
+**Common Issues and Solutions:**
+
+1. **Plugin Not Loading**
+   - Check file path is absolute with `file:///` prefix in config
+   - Verify plugin exports default correctly: `export default plugin`
+   - Ensure TypeScript compilation succeeded without errors
+   - Check OpenCode logs for import errors
+
+2. **Build Errors**
+   - Ensure you're using Bun/Node compatible TypeScript
+   - Check that `dist` directory exists and contains output
+   - Verify all dependencies are installed: `npm install`
+   - Common errors: missing type definitions, wrong module system
+
+3. **Configuration Issues**
+   - Plugin paths must be absolute: `file:///home/user/...`
+   - Required environment variables must be set
+   - MCP server connections require valid credentials
+   - Test config with minimal settings first
+
+4. **Permission Errors**
+   - File system access requires appropriate permissions
+   - Check if directory is writable
+   - Some operations may require elevated permissions
+   - Use sandbox directories for testing
         const result = processInput(args.input)
         return {
           content: result
@@ -245,8 +357,52 @@ const imageResult: ToolResult = {
     { type: 'image', url: 'file:///path/to/image.png' }
   ]
 }
+
+
+#### Creating a Plugin
+
+#### Official Pattern (Recommended for Beginners)
+
+This is the standard plugin structure. Always start here:
+
+```typescript
+// my-plugin/index.ts
+import { Plugin, Tool } from '@opencode-ai/plugin'
+
+const myPlugin: Plugin = {
+  name: 'my-custom-plugin',
+  version: '1.0.0',
+  description: 'Custom tools for OpenCode',
+  
+  tools: [
+    {
+      name: 'my_tool',
+      description: 'Performs a custom action',
+      parameters: {
+        type: 'object',
+        properties: {
+          input: {
+            type: 'string',
+            description: 'Input to process'
+          }
+        },
+        required: ['input']
+      },
+      execute: async (args, context) => {
+        // Tool implementation
+        const result = processInput(args.input)
+        return {
+          content: result
+        }
+      }
+    }
+  ]
+}
+
+export default myPlugin
 ```
 
+This pattern exports a plain object with `name`, `version`, `description`, and optionally `tools`, `commands`, `providers`, or `skills`.
 ### Registering Tools
 
 ```typescript
@@ -981,6 +1137,15 @@ const safeReadTool: Tool = {
 
 This section covers undocumented behaviors discovered through real plugin development.
 
+### Pattern Comparison: Official vs Advanced
+
+**Official Pattern** (above) - for stability, documentation, and beginners
+
+**Advanced Pattern** (below) - for real-world production use, auto-resume, event handling
+
+Choose based on your needs:
+- **Official pattern**: Stable, documented, easier to maintain, better for learning
+- **Advanced pattern**: More powerful, real-world patterns, auto-resume, event handling
 ### Plugin Export Pattern (NOT in official docs)
 
 The official docs show an object export, but **the real pattern is an async function** that returns hooks:
@@ -1277,7 +1442,8 @@ test("plugin preserves agent on resume", async () => {
 1. **Wrong message type for agent**: Used `AssistantMessage` instead of `UserMessage`
 2. **Missing type validation**: "Expected 'id' to be a string" when session is in error state
 3. **Wrong hook format**: Returned object from `ctx.on()` instead of `{ event, config }` hooks
-4. **Absolute path required**: Plugin config needs `file:///` + absolute path, not relative
+
+### Common Bugs Discovered
 
 ### Real World Patterns
 

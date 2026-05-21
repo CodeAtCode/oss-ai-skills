@@ -1171,9 +1171,397 @@ session = Session()
 Session.remove()  # Clean up
 ```
 
+## Advanced Query Patterns
+
+### Aggregation
+
+```python
+from sqlalchemy import func, select
+
+# Count
+stmt = select(func.count(User.id))
+total = session.scalar(stmt)
+
+# Sum / Average
+stmt = select(func.sum(Order.amount), func.avg(Order.amount))
+total, avg = session.execute(stmt).one()
+
+# Group by
+stmt = (
+    select(User.name, func.count(Post.id).label("post_count"))
+    .join(Post)
+    .group_by(User.name)
+    .order_by(func.count(Post.id).desc())
+)
+for name, count in session.execute(stmt):
+    print(f"{name}: {count} posts")
+```
+
+### Subqueries
+
+```python
+from sqlalchemy import subquery
+
+# Subquery: users with more than 5 posts
+post_count_sq = (
+    select(Post.author_id, func.count(Post.id).label("cnt"))
+    .group_by(Post.author_id)
+    .subquery()
+)
+
+stmt = (
+    select(User)
+    .join(post_count_sq, User.id == post_count_sq.c.author_id)
+    .where(post_count_sq.c.cnt > 5)
+)
+active_users = session.scalars(stmt).all()
+```
+
+### CTEs (Common Table Expressions)
+
+```python
+from sqlalchemy import CTE
+
+# Recursive CTE: organizational hierarchy
+org_cte = select(Employee).where(Employee.manager_id.is_(None)).cte(name="org", recursive=True)
+mgr = org_cte.alias("mgr")
+stmt = (
+    select(mgr)
+    .join(org_cte, mgr.c.manager_id == org_cte.c.id)
+)
+# Non-recursive CTE
+active_cte = (
+    select(User.id, User.name)
+    .where(User.is_active.is_(True))
+    .cte("active_users")
+)
+stmt = select(Order).join(active_cte, Order.user_id == active_cte.c.id)
+```
+
+### Window Functions
+
+```python
+from sqlalchemy import over
+
+# Row number, rank, dense rank
+stmt = (
+    select(
+        User.name,
+        User.salary,
+        func.row_number().over(order_by=User.salary.desc()).label("rn"),
+        func.rank().over(order_by=User.salary.desc()).label("rank"),
+        func.dense_rank().over(order_by=User.salary.desc()).label("drank"),
+        func.sum(User.salary).over(partition_by=User.dept).label("dept_total"),
+    )
+    .order_by(User.salary.desc())
+)
+for row in session.execute(stmt):
+    print(f"{row.name}: ${row.salary} (rank: {row.rank})")
+```
+
+## Transaction Management
+
+### Nested Transactions with Savepoints
+
+```python
+from sqlalchemy import begin_nested
+
+# Using savepoints for partial rollback
+with Session(engine) as session:
+    session.begin()
+    session.add(User(name="Alice"))
+
+    # Create a savepoint
+    nested = session.begin_nested()
+    try:
+        session.add(Order(user_id=1, amount=100))
+        # If this fails, only the nested transaction rolls back
+        nested.commit()
+    except Exception:
+        nested.rollback()
+        # Alice is still in the session, only Order was rolled back
+
+    session.commit()
+```
+
+### Read-Only Transactions
+
+```python
+from sqlalchemy import text
+
+with engine.connect() as conn:
+    conn.execute(text("SET TRANSACTION READ ONLY"))
+    result = conn.execute(select(User))
+    # Any write attempt will raise an error
+```
+
+### Session Lifecycle Best Practices
+
+```python
+# Pattern 1: Context manager (recommended)
+with Session(engine) as session:
+    session.add(user)
+    session.commit()
+# Session automatically closed
+
+# Pattern 2: Async session
+from sqlalchemy.ext.asyncio import AsyncSession
+
+async with AsyncSession(async_engine) as session:
+    async with session.begin():
+        session.add(user)
+    # Auto-committed and closed
+```
+
+## Bulk Operations
+
+### Bulk Inserts
+
+```python
+from sqlalchemy import insert
+
+# Core bulk insert (fastest)
+stmt = insert(User).values([
+    {"name": "Alice", "email": "alice@example.com"},
+    {"name": "Bob", "email": "bob@example.com"},
+    {"name": "Charlie", "email": "charlie@example.com"},
+])
+session.execute(stmt)
+session.commit()
+
+# ORM bulk insert (slower, but triggers events)
+session.add_all([
+    User(name="Alice", email="alice@example.com"),
+    User(name="Bob", email="bob@example.com"),
+])
+session.commit()
+```
+
+### Bulk Updates
+
+```python
+from sqlalchemy import update
+
+# Core bulk update
+stmt = (
+    update(User)
+    .where(User.is_active.is_(True))
+    .values(last_login=func.now())
+)
+session.execute(stmt)
+session.commit()
+
+# Bulk update with binding
+stmt = update(User).where(User.name == "old_name").values(name="new_name")
+session.execute(stmt)
+session.commit()
+```
+
+### Bulk Deletes
+
+```python
+from sqlalchemy import delete
+
+stmt = delete(User).where(User.last_login < func.now() - text("interval '90 days'"))
+result = session.execute(stmt)
+session.commit()
+print(f"Deleted {result.rowcount} inactive users")
+```
+
+### Performance Tips for Large Datasets
+
+```python
+# Use yield_per for large result sets
+for user in session.scalars(select(User)).yield_per(100):
+    process(user)
+
+# Use server-side cursors with stream()
+for row in session.stream(select(LargeTable)):
+    process(row)
+
+# Batch inserts with executemany
+session.execute(insert(User), [
+    {"name": f"User {i}", "email": f"user{i}@example.com"}
+    for i in range(10000)
+], execution_options={"max_rows": 1000})
+session.commit()
+```
+
+## Alembic Migrations Workflow
+
+### Initial Setup
+
+```bash
+# Install alembic
+pip install alembic
+
+# Initialize in project
+alembic init alembic
+
+# Edit alembic/env.py to import your Base metadata
+# from myapp.models import Base
+# target_metadata = Base.metadata
+```
+
+### autogenerate Configuration
+
+```python
+# alembic/env.py
+from sqlalchemy import engine_from_config
+from myapp.models import Base
+
+target_metadata = Base.metadata
+
+def run_migrations_online():
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+    )
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,       # Detect column type changes
+            compare_server_default=True,  # Detect default value changes
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+```
+
+### Common Migration Commands
+
+```bash
+# Create a new migration (auto-detect changes)
+alembic revision --autogenerate -m "add user table"
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Rollback last migration
+alembic downgrade -1
+
+# Rollback to specific revision
+alembic downgrade abc123
+
+# Show current revision
+alembic current
+
+# Show migration history
+alembic history
+
+# Generate SQL without applying
+alembic upgrade head --sql
+```
+
+### Custom Migration Operations
+
+```python
+"""add user email column
+
+Revision ID: xyz789
+"""
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    # Add column
+    op.add_column("users", sa.Column("email", sa.String(255), nullable=True))
+
+    # Populate with data
+    op.execute("UPDATE users SET email = name || '@example.com' WHERE email IS NULL")
+
+    # Make non-nullable
+    op.alter_column("users", "email", nullable=False)
+
+    # Add unique constraint
+    op.create_unique_constraint("uq_users_email", "users", ["email"])
+
+def downgrade():
+    op.drop_constraint("uq_users_email", "users", type_="unique")
+    op.drop_column("users", "email")
+```
+
+## Common Issues & Debugging
+
+### DetachedInstanceError
+
+```python
+# Problem: Accessing attributes after session closed
+with Session(engine) as session:
+    user = session.scalar(select(User).limit(1))
+# print(user.name)  # DetachedInstanceError!
+
+# Fix 1: Expire objects on commit = False
+session = Session(engine, expire_on_commit=False)
+
+# Fix 2: Access within session context
+with Session(engine) as session:
+    user = session.scalar(select(User).limit(1))
+    name = user.name  # OK, still attached
+```
+
+### Lazy Loading Outside Sessions
+
+```python
+# Problem: Accessing relationships after session closed
+with Session(engine) as session:
+    user = session.scalar(select(User).limit(1))
+# print(user.posts)  # Error! Relationship not loaded
+
+# Fix: Use eager loading
+stmt = select(User).options(selectinload(User.posts))
+user = session.scalar(stmt)
+print(user.posts)  # OK, already loaded
+```
+
+### N+1 Query Problem
+
+```python
+# BAD: N+1 queries (1 for users + N for each user's posts)
+users = session.scalars(select(User)).all()
+for user in users:
+    print(len(user.posts))  # Triggers 1 query per user!
+
+# GOOD: Single query with joined eager loading
+from sqlalchemy.orm import joinedload
+stmt = select(User).options(joinedload(User.posts))
+users = session.scalars(stmt).unique().all()
+
+# GOOD: Two queries with selective loading
+from sqlalchemy.orm import selectinload
+stmt = select(User).options(selectinload(User.posts))
+users = session.scalars(stmt).all()
+```
+
+### Session Leak Detection
+
+```python
+# Enable session tracking for debugging
+from sqlalchemy import event
+
+@event.listens_for(Session, "after_commit")
+def log_commit(session, context):
+    logger.info(f"Session committed: {id(session)}")
+
+@event.listens_for(Session, "after_rollback")
+def log_rollback(session, context):
+    logger.warning(f"Session rolled back: {id(session)}")
+
+# Use weak_instance_map to track detached instances
+# Always use context managers to prevent leaks:
+with Session(engine) as session:
+    # work...
+    session.commit()
+# Guaranteed cleanup
+```
+
 ## References
 
 - **Official Documentation**: https://docs.sqlalchemy.org/
-- **SQLAlchemy 2.0 Migration**: https://docs.sqlalchemy.org/en/20/changelog/migration_20.html
+- **SQLAlchemy 2.0 Overview**: https://docs.sqlalchemy.org/en/20/changelog/migration_20.html
+- **SQLAlchemy 2.0 Tutorial**: https://docs.sqlalchemy.org/en/20/tutorial/
 - **Alembic Documentation**: https://alembic.sqlalchemy.org/
+- **Alembic Tutorial**: https://alembic.sqlalchemy.org/en/latest/tutorial.html
 - **Async Support**: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+- **ORM Querying Guide**: https://docs.sqlalchemy.org/en/20/orm/queryguide/
+- **Core Expression Language**: https://docs.sqlalchemy.org/en/20/core/expression_api.html
