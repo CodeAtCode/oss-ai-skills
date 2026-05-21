@@ -1,5 +1,5 @@
 ---
-name: opencode-plugin
+name: opencode
 description: "Develop plugins, tools, and extensions for OpenCode AI coding agent with MCP, LSP integration, custom tools, and SDK usage"
 metadata:
   author: mte90

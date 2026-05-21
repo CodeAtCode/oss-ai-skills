@@ -1,3 +1,18 @@
+---
+name: aiohttp
+description: "Async HTTP server and client for Python with WebSocket support, middleware, streaming, and server-sent events"
+metadata:
+  author: mte90
+  version: "1.0.0"
+  tags:
+    - python
+    - http
+    - async
+    - server
+    - websocket
+    - sse
+---
+
 # aiohttp
 
 Asynchronous HTTP client/server framework for Python.

@@ -1,3 +1,19 @@
+---
+name: kde-plasmoid
+description: "Build KDE Plasma 6 widgets with Python backend and QML UI, including metadata, deployment, and KDE Store distribution"
+metadata:
+  author: mte90
+  version: "1.0.0"
+  tags:
+    - kde
+    - plasma
+    - plasmoid
+    - widget
+    - qml
+    - qt
+    - desktop
+---
+
 # KDE Plasmoid Development with Python
 
 Complete guide for developing Plasma widgets (Plasmoids) using Python backend with QML UI layer.

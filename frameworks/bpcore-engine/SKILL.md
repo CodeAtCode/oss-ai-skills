@@ -1,3 +1,16 @@
+---
+name: bpcore-engine
+description: "Lua game framework for Gameboy Advance with sprites, tilemaps, entities, collision, audio, multiplayer"
+metadata:
+  author: mte90
+  version: "1.0.0"
+  tags:
+    - lua
+    - gba
+    - game-engine
+    - gameboy-advance
+---
+
 # BPCore Engine Skill
 
 Comprehensive guide for building Gameboy Advance games using the BPCore Engine Lua framework.
