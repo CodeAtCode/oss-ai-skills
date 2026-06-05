@@ -3,7 +3,7 @@ name: ratatui
 description: "Rust terminal UI framework - widgets, components, layouts, events, input handling, and state management for TUI apps"
 metadata:
   author: mte90
-  version: "1.0.0"
+  version: "1.0.1"
   tags:
     - rust
     - tui
@@ -39,8 +39,40 @@ Ratatui is a Rust library for building terminal user interfaces (TUI). It provid
 ```toml
 # Cargo.toml
 [dependencies]
-ratatui = "0.28"
+ratatui = "0.30.1"
 ```
+
+### Crate Modularization (v0.30+)
+
+v0.30 introduced a workspace structure. You can depend on specific crates:
+
+```toml
+# Cargo.toml
+[dependencies]
+# Full crate (recommended for most users)
+ratatui = "0.30.1"
+
+# Or individual crates for more control
+ratatui-core = "0.30.1"      # Core types, traits, utilities
+ratatui-widgets = "0.30.1"   # Built-in widgets
+ratatui-crossterm = "0.30.1" # Crossterm backend
+ratatui-termion = "0.30.1"   # Termion backend
+ratatui-termwiz = "0.30.1"   # Termwiz backend
+ratatui-macros = "0.30.1"    # Macro utilities
+```
+
+**Feature flags:**
+```toml
+[dependencies]
+ratatui = { version = "0.30.1", default-features = false, features = [
+    "crossterm_0_28",      # Use crossterm 0.28 (default: 0.29)
+    "layout-cache",        # Enable layout caching (default: enabled)
+    "palette",             # HSLuv color support
+    "anstyle",             # anstyle conversions
+] }
+```
+
+MSRV: 1.88.0 (v0.30.1)
 
 ## Quick Start
 
@@ -117,6 +149,78 @@ let chunks = Layout::default()
     .split(area);
 ```
 
+### Flex::SpaceEvenly (v0.30+)
+
+```rust
+use ratatui::layout::Flex;
+
+// v0.30+: SpaceEvenly - equal spacing including edges
+let chunks = Layout::default()
+    .direction(Direction::Horizontal)
+    .flex(Flex::SpaceEvenly)
+    .constraints([Constraint::Length(20), Constraint::Length(20), Constraint::Length(20)])
+    .split(area);
+
+// SpaceAround - middle spacers twice the size of edges (CSS-like, v0.30+)
+let chunks = Layout::default()
+    .direction(Direction::Horizontal)
+    .flex(Flex::SpaceAround)
+    .constraints([Constraint::Length(20), Constraint::Length(20)])
+    .split(area);
+```
+
+### Overlapping Layouts (v0.29+)
+
+Create layouts where segments share pixels (useful for border overlap):
+
+```rust
+use ratatui::layout::Spacing;
+
+// Overlap layouts by -1 spacing
+let chunks = Layout::default()
+    .direction(Direction::Horizontal)
+    .spacing(Spacing::Overlap)  // or .spacing(-1)
+    .constraints([
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(3),
+    ])
+    .split(area);
+
+// Example: stacked borders
+let stacked = Layout::default()
+    .direction(Direction::Vertical)
+    .spacing(Spacing::Overlap)
+    .constraints([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(area);
+```
+
+### Ergonomic Rect Methods (v0.30+)
+
+```rust
+use ratatui::layout::Rect;
+
+// Center a rect within another
+let centered = area.centered();           // Both dimensions
+let centered_h = area.centered_horizontally();
+let centered_v = area.centered_vertically();
+
+// Create rect outside current with margin
+let outer = area.outer(Offset::new(1, 0));  // 1 cell to the right
+
+// Split with compile-time array (v0.30+)
+let [left, right] = area.layout::<2>(Direction::Horizontal, &constraints);
+let [top, middle, bottom] = area.layout::<3>(Direction::Vertical, &constraints);
+
+// Try versions return Result
+let result = area.try_layout::<2>(Direction::Horizontal, &constraints);
+let vec = area.layout_vec(Direction::Horizontal, &constraints);
+```
+
 ### Nested Layouts
 
 ```rust
@@ -164,6 +268,49 @@ let block = Block::bordered()
 let inner = Paragraph::new("Content");
 f.render_widget(block.inner(area), area);
 f.render_widget(inner, block.inner(area));
+```
+
+### Block Border Merging (v0.30+)
+
+Overlapping borders automatically merge into clean single borders:
+
+```rust
+use ratatui::widgets::{Block, BorderType, MergeStrategy};
+
+// Use MergeStrategy to control behavior
+let block = Block::bordered()
+    .title("Merged")
+    .merge_strategy(MergeStrategy::Merge);
+
+// New BorderType variants (v0.30+)
+let block = Block::bordered()
+    .border_type(BorderType::LightDoubleDashed)
+    .border_type(BorderType::HeavyDoubleDashed)
+    .border_type(BorderType::LightTripleDashed)
+    .border_type(BorderType::HeavyTripleDashed)
+    .border_type(BorderType::LightQuadrupleDashed)
+    .border_type(BorderType::HeavyQuadrupleDashed);
+```
+
+### Block Shadow (v0.30.1+)
+
+```rust
+use ratatui::widgets::{Block, Shadow};
+use ratatui::layout::Offset;
+
+let block = Block::bordered()
+    .title("Popup")
+    .shadow(Shadow::dark_shade()  // Preset: dark shade effect
+        .black()                   // Shadow color
+        .on_white()               // Background color
+        .offset(Offset::new(2, 1)));  // Offset x, y
+
+// Custom shadow
+let block = Block::bordered()
+    .shadow(Shadow::default()
+        .symbol('░')
+        .style(Style::default().fg(Color::DarkGray))
+        .offset(Offset::new(1, 1)));
 ```
 
 ### Button
@@ -233,6 +380,55 @@ let table = Table::new(
 f.render_widget(table, area);
 ```
 
+### Table Column Selection (v0.29+)
+
+```rust
+use ratatui::widgets::{Table, Row, Cell, TableState};
+
+let mut table_state = TableState::default();
+
+// Column selection methods
+table.select_column(2);                           // Select column 2
+table.select_first_column();
+table.select_next_column();
+table.select_previous_column();
+table.select_last_column();
+
+// Cell selection (v0.29+)
+table.select_cell();
+
+// Scrolling
+table.scroll_right_by(2);
+table.scroll_left_by(1);
+
+// Styling
+table.column_highlight_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray));
+table.cell_highlight_style(Style::default().fg(Color::White).bg(Color::Blue));
+
+f.render_stateful_widget(table, area, &mut table_state);
+```
+
+### Table Column Span (v0.30.1+)
+
+```rust
+use ratatui::widgets::{Table, Row, Cell};
+
+let rows = vec![
+    Row::new(vec![
+        Cell::new("Name").column_span(2),  // Span 2 columns
+        Cell::new("Score"),
+    ]),
+    Row::new(vec![
+        Cell::new("Long Name").column_span(3),  // Span 3 columns
+    ]),
+];
+
+let table = Table::new(rows, &[Constraint::Length(10), Constraint::Length(10), Constraint::Length(10)])
+    .block(Block::bordered());
+
+f.render_widget(table, area);
+```
+
 ### Gauge
 
 ```rust
@@ -259,6 +455,20 @@ let sparkline = Sparkline::default()
     .bar_set(" ▎▏");
 
 f.render_widget(sparkline, area);
+```
+
+### Sparkline absent values (v0.29+)
+
+```rust
+use ratatui::widgets::Sparkline;
+
+// Handle missing/None values distinctly from zero
+let data = vec![Some(1), Some(5), None, Some(3), Some(0), None];
+
+let sparkline = Sparkline::default()
+    .data(&data)
+    .absent_value_style(Style::default().fg(Color::DarkGray))  // For None
+    .absent_value_symbol('·');  // Symbol for absent values
 ```
 
 ### Calendar
@@ -295,6 +505,89 @@ let chart = Chart::new(vec![Dataset::default()
     .y_axis(Axis::default().bounds([0.0, 6.0]));
 
 f.render_widget(chart, area);
+```
+
+### Canvas/Chart New Markers (v0.30+)
+
+```rust
+use ratatui::widgets::Marker;
+
+// New marker types (v0.30+)
+let canvas = Canvas::default()
+    .marker(Marker::Quadrant)   // 2x2 pseudo-pixel
+    .marker(Marker::Sextant)    // 2x3 resolution
+    .marker(Marker::Octant);    // 2x4 resolution (alternative to Braille)
+
+// Custom marker (v0.30.1+)
+let canvas = Canvas::default()
+    .marker(Marker::Custom('+'));
+
+let chart = Chart::new(vec![Dataset::default()
+    .marker(Marker::Custom('x'))]);
+```
+
+### Canvas/Chart Filled Areas (v0.30.1+)
+
+```rust
+use ratatui::widgets::{Canvas, FilledLine, Marker};
+
+// Canvas: use FilledLine to fill area under line
+let canvas = Canvas::default()
+    .paint(|ctx| {
+        ctx.draw(&FilledLine {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 10.0,
+            y2: 5.0,
+            color: Color::Blue,
+        });
+    });
+
+// Chart: use GraphType::Area with Dataset::fill_to_y
+use ratatui::widgets::GraphType;
+let chart = Chart::new(vec![Dataset::default()
+    .data(&data)
+    .graph_type(GraphType::Area)
+    .fill_to_y(0.0)  // Fill area down to y=0
+    .style(Style::default().fg(Color::Cyan))]);
+```
+
+### RatatuiLogo (v0.29+)
+
+```rust
+use ratatui::widgets::RatatuiLogo;
+
+let logo = RatatuiLogo::default();
+// Sizes: tiny (2x15), small (2x27)
+let logo = RatatuiLogo::tiny();
+let logo = RatatuiLogo::small();
+
+f.render_widget(logo, area);
+```
+
+### RatatuiMascot (v0.30+)
+
+```rust
+use ratatui::widgets::RatatuiMascot;
+
+let mascot = RatatuiMascot::default()
+    .eye_color(Color::Yellow);  // Customize eye color
+
+f.render_widget(mascot, area);
+```
+
+### Fill (v0.30.1+)
+
+```rust
+use ratatui::widgets::Fill;
+
+// Paint entire area with same symbol and style
+let fill = Fill::new("█")
+    .style(Style::default().fg(Color::Blue).bg(Color::Black));
+
+f.render_widget(fill, area);
+
+// Useful for backgrounds, separators, etc.
 ```
 
 ## Input Handling
@@ -423,6 +716,33 @@ Color::Indexed(42)
 
 // RGB colors
 Color::Rgb(255, 128, 0)
+
+// HSLuv colors (v0.29+) - perceptually uniform
+// Requires "palette" feature
+Color::from_hsluv(Hsluv::new(0.0, 100.0, 50.0))  // Red
+
+// Tuple conversions (v0.30+)
+Color::from([255, 0, 0]);    // RGB array
+Color::from((255, 0, 0));    // RGB tuple
+Color::from((255, 0, 0, 255)); // RGBA tuple
+```
+
+### Stylize Trait Methods (v0.30+)
+
+```rust
+use ratatui::style::Stylize;
+
+// Methods directly on Style
+let style = Style::new().blue().on_black().bold();
+
+// Styled for primitives (v0.30+)
+let styled: Text = "hello".yellow();
+let styled: Span = "world".blue().bold();
+let styled: Line = "text".red().italic();
+
+// From anstyle (v0.30+)
+use ratatui::anstyle::AnsiColor;
+let color = Color::from(AnsiColor::Blue);
 ```
 
 ### Modifiers
@@ -523,6 +843,61 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
+```
+
+## Breaking Changes (v0.29 - v0.30.1)
+
+### v0.30 Breaking Changes
+
+- **Block::title() removed**: Use `Line` with alignment instead
+  ```rust
+  // Old (removed)
+  Block::new().title("foo")
+  
+  // New (v0.30+)
+  Block::new().title(Line::from("foo"))
+  ```
+
+- **block::Title deprecated**: Use `Line` directly (will be removed in v0.31)
+
+- **Style no longer implements Styled**: Use methods directly on `Style`
+  ```rust
+  // Old
+  let style = Style::default().fg(Color::Blue).apply_to(widget);
+  
+  // New (v0.30+)
+  let style = Style::default().blue();
+  widget.style(style);
+  ```
+
+- **Table::highlight_style() deprecated**: Use `row_highlight_style()`
+
+- **Marker is #[non_exhaustive]**: Use `Marker::Custom()` for custom markers
+
+- **Backend trait changes**: 
+  - Requires associated `Error` type
+  - Requires `clear_region()` method
+
+- **List::highlight_symbol()**: Now accepts `Into<Line>`
+
+### v0.29 Breaking Changes
+
+- **Rect::area() returns u32**: Previously returned u16
+
+- **TableState serialization**: Now includes `selected_column` field
+
+- **Sparkline::data()**: No longer `const`
+
+### Migration Tips
+
+```rust
+// Migrate from Block::title() to Line
+let block = Block::bordered()
+    .title(Line::from("Title").centered())
+    .title_top(Line::from("Subtitle").left_aligned());
+
+// Migrate Table highlight style
+table = table.row_highlight_style(Style::default().fg(Color::Yellow));
 ```
 
 ## Best Practices
@@ -1972,6 +2347,73 @@ terminal.draw(|frame| {
 }).unwrap();
 
 // Assert on terminal.backend() content
+```
+
+### no_std Support (v0.30+)
+
+Full `no_std` compilation for embedded targets (ESP32, STM32H7, PSP, UEFI):
+
+```toml
+# Cargo.toml
+[dependencies]
+ratatui = { version = "0.30", default-features = false }
+
+# For embedded without allocator, also add:
+# Use custom backend like mousefood
+mousefood = "0.1"
+
+# For atomic types (v0.30.1+)
+ratatui = { version = "0.30.1", default-features = false, features = ["layout-cache"] }
+```
+
+```rust
+// In your lib.rs
+#![no_std]
+
+extern crate alloc;
+
+// Use with custom backend for no_std
+use ratatui::backend::Backend;
+```
+
+Requirements for no_std:
+- Global allocator (e.g., `alloc`)
+- Atomic types (use `portable-atomic` feature if needed)
+
+### Execution API (v0.30+)
+
+Simplified terminal lifecycle with `ratatui::run()`:
+
+```rust
+use ratatui::{ratatui, Terminal};
+
+ratatui::run(|terminal| {
+    // Your app loop
+    loop {
+        terminal.draw(|frame| {
+            // Render your app
+        })?;
+        
+        // Handle events...
+        break; // Exit
+    }
+    Ok(())
+})?;
+```
+
+Manual lifecycle with `init()` and `restore()`:
+
+```rust
+use ratatui::Terminal;
+
+let backend = CrosstermBackend::new(std::io::stdout());
+ratatui::init()?;  // Initialize terminal (alternate screen, raw mode)
+
+let terminal = Terminal::new(backend)?;
+
+// ... your app ...
+
+ratatui::restore()?;  // Restore terminal (leave alternate screen)
 ```
 
 ### Mouse Capture
