@@ -448,7 +448,7 @@ dialog.show()  # Doesn't block
 
 ---
 
-## Best Practices (Extended)
+### Best Practices Code Examples
 
 ```python
 # ✅ GOOD: Always have Cancel button

@@ -31,11 +31,11 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | Skill | Description | Lines | Tags |
 |-------|-------------|-------|------|
 | [aiohttp](frameworks/aiohttp/SKILL.md) | Async HTTP server/client - WebSocket, SSE, middleware, JWT auth, logging, error handling, pytest-aiohttp testing | 1,540 | python, http, async, server, websocket, sse |
-| [android-apk-patch](frameworks/android-apk-patch/SKILL.md) | Modify, repackage, test Android APKs - split APK handling, GApps workarounds, signing, Frida instrumentation, redroid/Waydroid testing | 1,548 | android, apk, patching, smali, signing, split-apk, gapps, frida, redroid, waydroid |
-| [BPCore Engine](frameworks/bpcore-engine/SKILL.md) | Lua game framework for GBA - API reference, sprites, entities, collision, audio, save/load SRAM, multiplayer protocol | 837 | lua, gba, game-engine, gameboy-advance |
+| [android-apk-patch](frameworks/android-apk-patch/SKILL.md) | Modify, repackage, test Android APKs - split APK handling, GApps workarounds, signing, Frida instrumentation, redroid/Waydroid testing | 1,565 | android, apk, patching, smali, signing, split-apk, gapps, frida, redroid, waydroid |
+| [BPCore Engine](frameworks/bpcore-engine/SKILL.md) | Lua game framework for GBA - API reference, sprites, entities, collision, audio, save/load SRAM, multiplayer protocol | 873 | lua, gba, game-engine, gameboy-advance |
 | [Celery](frameworks/celery/SKILL.md) | Distributed task queue - Redis/RabbitMQ brokers, periodic tasks, Django integration | 1,250 | python, task-queue, async, distributed, celery |
-| [Django (Security)](frameworks/django-security/SKILL.md) | CSRF protection, authentication, sessions, login/logout, password handling, middleware, protected views | 1,499 | python, django, web-framework, async, hub |
-| [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,503 | python, django, bolt, api, rust, performance, async |
+| [Django (Security)](frameworks/django-security/SKILL.md) | CSRF protection, authentication, sessions, login/logout, password handling, middleware, protected views | 1,489 | python, django, web-framework, async, hub |
+| [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,567 | python, django, bolt, api, rust, performance, async |
 | [Django Celery](frameworks/django-celery/SKILL.md) | Django Celery integration - distributed tasks, django-celery-beat scheduling, monitoring | ~700 | python, django, celery, task-queue, periodic-tasks, django-celery-beat |
 | [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, template tags, middleware, CSRF protection | 415 | django, htmx, python, web, frontend, partial-rendering |
 | [Django Ninja](frameworks/django-ninja/SKILL.md) | Fast REST APIs with Pydantic - schemas, authentication, pagination, OpenAPI docs | 1,869 | python, django, rest-api, pydantic, openapi, type-safe |
@@ -47,20 +47,20 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [LlamaIndex](frameworks/llama-index/SKILL.md) | LLM applications - RAG, retrievers, agents, vector stores, streaming, evaluation | 1,130 | python, llm, rag, llamaindex, ai, vector-store, agents |
 | [Pydantic](frameworks/pydantic/SKILL.md) | Data validation - TypeAdapter, RootModel, discriminated unions, error handling, serialization, settings, FastAPI | 1,499 | python, validation, pydantic, serialization, settings |
 | [pygame](frameworks/pygame/SKILL.md) | Python 2D game development - sprites, surfaces, events, sound, fonts, game loops, collision | 549 | python, game-development, 2d-games, pygame, graphics |
-| [PyQt](frameworks/pyqt/SKILL.md) | Desktop applications - PyQt5/PyQt6/PySide6, widgets, signals, layouts, threading, testing | 1,941 | python, qt, pyqt, pyside, gui, desktop, hub |
+| [PyQt](frameworks/pyqt/SKILL.md) | Desktop applications - PyQt5/PyQt6/PySide6, widgets, signals, layouts, threading, testing | 1,937 | python, qt, pyqt, pyside, gui, desktop, hub |
 |   ↳ [pyqt-core](frameworks/pyqt/core/SKILL.md) | QtCore fundamentals - signals, slots, properties, timers, settings, file I/O | 487 | python, qt, pyqt, core, signals |
 |   ↳ [pyqt-dialogs](frameworks/pyqt/dialogs/SKILL.md) | Dialogs - QFileDialog, QMessageBox, custom dialogs, Qt 6 | 518 | python, qt, pyqt, dialogs, ui |
-|   ↳ [pyqt-multimedia](frameworks/pyqt/multimedia/SKILL.md) | Audio/video playback, camera access, media recording, error handling, codec support | 1,772 | python, qt, pyqt, multimedia, audio, video |
+|   ↳ [pyqt-multimedia](frameworks/pyqt/multimedia/SKILL.md) | Audio/video playback, camera access, media recording, error handling, codec support | 1,773 | python, qt, pyqt, multimedia, audio, video |
 |   ↳ [pyqt-styling](frameworks/pyqt/styling/SKILL.md) | QSS styling - selectors, properties, dark theme | 668 | python, qt, pyqt, styling, qss, css |
 |   ↳ [pyqt-testing](frameworks/pyqt/testing/SKILL.md) | Testing - pytest-qt, qtbot, waitSignal, fixtures | 444 | python, qt, pyqt, testing, pytest |
-|   ↳ [pyqt-threading](frameworks/pyqt/threading/SKILL.md) | Threading - QThread, QThreadPool, QRunnable, moveToThread, thread safety, lifecycle, pitfalls | 941 | python, qt, pyqt, threading, concurrency |
+|   ↳ [pyqt-threading](frameworks/pyqt/threading/SKILL.md) | Threading - QThread, QThreadPool, QRunnable, moveToThread, thread safety, lifecycle, pitfalls | 931 | python, qt, pyqt, threading, concurrency |
 |   ↳ [pyqt-widgets](frameworks/pyqt/widgets/SKILL.md) | QtWidgets - buttons, inputs, containers, item views, layouts | 610 | python, qt, pyqt, widgets, gui |
 | [pytest](frameworks/pytest/SKILL.md) | Python testing framework - fixtures, parametrization, asyncio, Django, mocking, coverage, parallel | 1,481 | python, testing, tdd, fixtures, unit-test |
 | [Qt C++](frameworks/qt-cpp/SKILL.md) | Cross-platform desktop apps - signals/slots, QML, threading, CMake, deployment | 1,204 | qt, c++, gui, desktop, qt6, cmake, cross-platform, qml |
 | [ratatui](frameworks/ratatui/SKILL.md) | Rust TUI framework - widgets, layouts, design principles, accessibility, MVU architecture, ecosystem, recipes | 2,099 | rust, tui, terminal, cli, user-interface, ecosystem |
 | [SQLAlchemy](frameworks/sqlalchemy/SKILL.md) | Python SQL toolkit and ORM - advanced queries, CTEs, window functions, bulk ops, transaction management, Alembic migrations, debugging | 1,567 | python, orm, database, sql, alembic, async |
-| [Tailwind CSS](frameworks/tailwind/SKILL.md) | Utility-first CSS framework v4 - CSS-first config, @theme directive, Oxide engine | 540 | css, frontend, responsive, design-system, utility-first |
-| [TurboDRF](frameworks/turbodrf/SKILL.md) | Django REST mixin - TurboDRFMixin, auto CRUD, role-based permissions, tenancy, security gates | 720 | python, django, rest-api, turbodrf, permissions |
+| [Tailwind CSS](frameworks/tailwind/SKILL.md) | Utility-first CSS framework v4 - CSS-first config, @theme directive, Oxide engine | 798 | css, frontend, responsive, design-system, utility-first |
+| [TurboDRF](frameworks/turbodrf/SKILL.md) | Django REST mixin - TurboDRFMixin, auto CRUD, role-based permissions, tenancy, security gates | 713 | python, django, rest-api, turbodrf, permissions |
 
 ### Tool
 
@@ -76,7 +76,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 
 | Skill | Description | Lines | Tags |
 |-------|-------------|-------|------|
-| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Common Rust development pitfalls - compiler errors, struct constructors, test organization, coverage enforcement | 730 | rust, pitfalls, best-practices, common-errors, testing |
+| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Common Rust development pitfalls - compiler errors, struct constructors, test organization, coverage enforcement | 749 | rust, pitfalls, best-practices, common-errors, testing |
 
 ## Skill Format
 

@@ -1,30 +1,23 @@
+---
+name: turbodrf
+description: "TurboDRF - fast Django REST framework with automatic OpenAPI, serializers, views, routers, and caching"
+metadata:
+  author: mte90
+  version: 1.0.0
+  tags:
+    - python
+    - django
+    - rest-api
+    - openapi
+    - serializers
+    - caching
+---
+
 # turbodrf
 
 **TurboDRF** - Dead simple Django REST API generator with role-based permissions
 
 Turn your Django models into fully-featured REST APIs with a mixin and a configuration method. Zero boilerplate.
-
-```yaml
-name: turbodrf
-description: "TurboDRF - Dead simple Django REST API generator with role-based permissions"
-metadata:
-  author: Alexander Collins
-  version: "0.4.4"
-  keywords:
-    - python
-    - django
-    - rest-api
-    - django-rest-framework
-    - turbo-drf
-    - api-generator
-    - role-based-permissions
-  tags:
-    - django
-    - rest-api
-    - openapi
-    - fast
-    - permissions
-```
 
 ## Overview
 

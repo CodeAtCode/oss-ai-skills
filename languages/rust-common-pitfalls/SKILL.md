@@ -718,6 +718,25 @@ let _ = validate(input);  // Silently ignores error
 let _ = validate(input).expect("validation should pass");
 ```
 
+## Best Practices
+
+- **Read compiler errors fully before acting**: Rust's error messages are verbose for a reason—read the entire diagnostic including suggestions.
+- **Use `cargo check` in a tight loop**: Faster than full builds; run after every small change to catch errors early.
+- **Structure tests in `tests/` for integration and `#[cfg(test)] mod tests` for unit**: Keep unit tests close to code; use `tests/` for cross-module integration tests.
+- **Enforce coverage with `cargo tarpaulin` or `cargo-llvm-cov`**: Set CI gates (e.g., 80% line coverage) to prevent regression.
+- **Prefer `Result<T, E>` over `Option<T>` when errors carry meaning**: Use `Option` for absence, `Result` for recoverable failures with context.
+
+---
+
+## References
+
+- [The Rust Programming Language (The Book)](https://doc.rust-lang.org/book/)
+- [Rust Compiler Error Index](https://doc.rust-lang.org/error-index.html)
+- [rustc Error Documentation](https://doc.rust-lang.org/rustc/errors/)
+- [Cargo Book: Testing Chapter](https://doc.rust-lang.org/cargo/reference/testing.html)
+- [cargo-llvm-cov Documentation](https://github.com/taiki-e/cargo-llvm-cov)
+- [cargo-tarpaulin Documentation](https://github.com/xd009642/tarpaulin)
+
 ---
 
 ## Summary

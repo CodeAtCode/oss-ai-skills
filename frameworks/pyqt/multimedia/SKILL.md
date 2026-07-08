@@ -565,7 +565,8 @@ def closeEvent(self, event):
 - **Qt Multimedia**: https://doc.qt.io/qt-6/qtmultimedia-index.html
 - **PySide6 Multimedia**: https://doc.qt.io/qt-6/multimedia.html
 - **GStreamer**: https://gstreamer.freedesktop.org/
-## Video Playback
+
+## Video Playback (PySide6)
 
 ### QMediaPlayer + QVideoWidget
 
@@ -718,7 +719,7 @@ Note: Codec support varies by platform. On Linux, ensure GStreamer backends are 
 
 ---
 
-## Camera Access
+## Camera Access (PySide6)
 
 ### QCamera + QMediaCaptureSession
 

@@ -11,7 +11,6 @@ metadata:
     - csrf
     - authentication
     - sessions
-    - authentication
 ---
 
 # Django Security
@@ -1224,18 +1223,6 @@ ORDER BY (embedding <=> '[vector]') ASC;
 
 ---
 
-## References
-
-- **Django CSRF Docs**: https://docs.djangoproject.com/en/stable/ref/csrf/
-- **Django Authentication**: https://docs.djangoproject.com/en/stable/topics/auth/
-- **Django Security**: https://docs.djangoproject.com/en/stable/topics/security/
-- **ORM Performance**: https://johnnymetz.com/posts/avoiding-duplicate-objects-in-django-querysets/
-- **Time-based Lookups**: https://johnnymetz.com/posts/django-time-based-lookups-performance/
-- **Django Tasks**: https://www.loopwerk.io/articles/2026/django-tasks-review/
-- **Django Permissions**: https://dandavies99.github.io/posts/2021/11/django-permissions/
-
----
-
 ## GeneratedField (Django 5.0+)
 
 Database-generated columns that are computed by the DB when source fields change.
@@ -1442,10 +1429,6 @@ Product.objects.filter(data__specs__memory__gte=16)
 
 ---
 
-## References
-
----
-
 ## Django 6.0 Essentials
 
 ### Tasks Framework (NEW - replacing Celery for simple needs)
@@ -1494,6 +1477,13 @@ Uses `RETURNING` clause (SQLite, PostgreSQL, Oracle).
 
 ## References
 
+- **Django CSRF Docs**: https://docs.djangoproject.com/en/stable/ref/csrf/
+- **Django Authentication**: https://docs.djangoproject.com/en/stable/topics/auth/
+- **Django Security**: https://docs.djangoproject.com/en/stable/topics/security/
+- **ORM Performance**: https://johnnymetz.com/posts/avoiding-duplicate-objects-in-django-querysets/
+- **Time-based Lookups**: https://johnnymetz.com/posts/django-time-based-lookups-performance/
+- **Django Tasks**: https://www.loopwerk.io/articles/2026/django-tasks-review/
+- **Django Permissions**: https://dandavies99.github.io/posts/2021/11/django-permissions/
 - **ORM Database Support**: https://www.paulox.net/2025/10/06/django-orm-comparison/
 - **GeneratedField PostgreSQL**: https://www.paulox.net/2023/11/24/database-generated-columns-part-2-django-and-postgresql/
 - **GeneratedField SQLite**: https://www.paulox.net/2023/11/07/database-generated-columns-part-1-django-and-sqlite/

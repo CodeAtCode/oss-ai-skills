@@ -1,5 +1,5 @@
 ---
-name: openrct2-plugin
+name: openrct2
 description: "Develop plugins for OpenRCT2 - JavaScript/TypeScript scripting, game actions, UI windows, hooks, multiplayer sync"
 metadata:
   author: mte90

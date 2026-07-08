@@ -831,6 +831,29 @@ function safe_peek(addr)
 end
 ```
 
+## Best Practices
+
+- **Memory management for sprites/tilemaps**: Pre-allocate entity pools to avoid runtime allocation; batch stationary sprites to reduce redraw calls; keep tile updates minimal per frame.
+- **Managing SRAM save limits**: SRAM is only 32KB—structure save data compactly; use checksums for corruption detection; validate save data before loading.
+- **Fixed-point math for GBA hardware**: GBA lacks FPU—use fixed-point arithmetic (e.g., multiply by 256 for 8.8 format); avoid division where possible.
+- **Keeping entity update loops bounded**: Process only active entities; use spatial partitioning for collision checks; cap entity count at 128.
+- **Using the link cable protocol carefully**: Keep packets under 11 bytes; process recv() in a loop to clear queue; handle disconnects gracefully.
+
+## Troubleshooting
+
+- **Emulator vs hardware differences**: mGBA is accurate but timing may differ; test on real hardware for final verification.
+- **Sprite flickering (too many sprites per scanline)**: GBA has 128 sprite slots but only ~10 visible per scanline; distribute sprites vertically.
+- **Audio channel conflicts**: Only 3 sound channels + 1 music; prioritize important sounds using the priority parameter.
+- **Save data corruption**: Always write checksums; verify marker byte (0x42) before loading; use atomic writes (write to temp, then commit).
+
+## References
+
+- [BPCore Engine GitHub Repository](https://github.com/evanbowman/BPCore-Engine)
+- [GBA Hardware Specifications](https://problemkaputt.de/gbatek.htm)
+- [Tonc GBA Tutorial](https://www.coranac.com/tonc/text/)
+- [GBA Programming Wiki](https://gbadev.net/)
+- [mGBA Emulator](https://mgba.io/)
+
 ---
 
 ## Summary

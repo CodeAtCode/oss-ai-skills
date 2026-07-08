@@ -1015,6 +1015,16 @@ java -jar uber-apk-signer.jar --apks splits/
 | Not aligned at all | App installs but runs slow; `INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION` on some ROMs | Always run `zipalign -v -p 4` |
 | Missing v2 scheme on API 24+ | Silent rejection or `INSTALL_PARSE_FAILED_NO_CERTIFICATES` | apksigner defaults to v1+v2; verify with `apksigner verify -v` |
 
+## Best Practices
+
+- **Always backup the original APK**: Keep an unmodified copy before any patching—recovery is impossible without it.
+- **Test on multiple Android versions**: Verify compatibility across API levels (e.g., 29, 33, 35) before distribution.
+- **Use proper signing keys (don't lose them)**: Store keystore files securely with strong passwords; losing your key means you can never update the app.
+- **Keep the original package name unless deliberately changing it**: Changing package name creates a new app identity, preventing updates.
+- **Verify split APK alignment**: Use `zipalign -v -p 4` on all splits before signing; misalignment causes runtime crashes.
+- **Test GApps-dependent APKs in an emulator first**: Use Android Studio AVD or redroid to catch GApps integration issues before physical device testing.
+- **Document all modifications made**: Keep a changelog of smali/resource edits for debugging and future patches.
+
 ### 8.2 Redroid: Android in Docker for Headless APK Testing
 
 #### 8.2.1 What Is Redroid?

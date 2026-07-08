@@ -791,16 +791,6 @@ class LeakyResourceGuard:
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 ```
 
-## Best Practices
-
-1. **Always use signals for cross-thread communication**
-2. **Keep worker objects thread-affinity aware** - Don't assume they're in main thread
-3. **Clean up threads properly** - Use deleteLater() and quit() + wait()
-4. **Handle cancellation** - Check flags periodically in long operations
-5. **Use QThreadPool for parallel independent tasks**
-6. **Use QThread.moveToThread() for single long operations**
-7. **Never use time.sleep() in main thread** - Use timers or workers instead
-
 ## Common Issues
 
 | Issue | Cause | Solution |
