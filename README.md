@@ -16,10 +16,10 @@ This repository provides reusable skill definitions that can be loaded into AI c
 |-------|-------------|-------|------|
 | [Firefox Extension](extend/firefox-extension/SKILL.md) | Build WebExtensions for Firefox - MV2/MV3, APIs, web-ext, AMO publishing | 796 | firefox, webextension, browser-extension, mozilla, amo, manifest-v3 |
 | [GIMP Plugin](extend/gimp-plugin/SKILL.md) | GIMP 3.0+ plugins with Python 3 - GEGL operations, image manipulation, UI dialogs | 1,156 | python, gimp, image-processing, graphics, plugin, gegl |
-| [Kate Plugin](extend/kate-plugin/SKILL.md) | Develop C++ plugins for Kate text editor - KTextEditor interface, CMake, Qt widgets | ~441 | kate, kde, text-editor, plugin, c++, qt, kde-frameworks |
+| [Kate Plugin](extend/kate-plugin/SKILL.md) | Develop C++ plugins for Kate - KTextEditor, CMake/ECM, QThread agent architecture, IThreadStorage, QTest | 498 | kate, kde, text-editor, plugin, c++, qt, kde-frameworks |
 | [KDE Plasmoid](extend/kde-plasmoid/SKILL.md) | Build Plasma 6 widgets - Python backend, QML UI, deployment, KDE Store publishing, troubleshooting | 1,168 | kde, plasma, plasmoid, widget, qml, qt, desktop |
 | [mGBA Scripting](extend/mgba/SKILL.md) | Lua scripting for mGBA emulator - game automation, memory hacking, cheats, callbacks | ~800 | lua, emulator, gba, gameboy-advance, scripting, memory-hacking |
-| [OpenCode Plugin](extend/opencode/SKILL.md) | Develop plugins for OpenCode AI agent - MCP, tools, SDK, Hello World example, troubleshooting, extension type guide | 1,511 | opencode, plugin, ai-agent, mcp, tool-development |
+| [OpenCode Plugin](extend/opencode/SKILL.md) | Develop plugins for OpenCode AI agent - MCP, tools, SDK, subagent lifecycle, event handler patterns, checkForToolCallAsText | 1,745 | opencode, plugin, ai-agent, mcp, tool-development |
 | [OpenRCT2 Plugin](extend/openrct2/SKILL.md) | JavaScript/TypeScript plugins for OpenRCT2 - game actions, UI windows, hooks, multiplayer | 877 | openrct2, plugin, javascript, typescript, game-modding, rollercoaster-tycoon |
 | [Playwright Visual Regression](frameworks/playwright-visual-regression/SKILL.md) | Visual regression testing with Playwright - toHaveScreenshot(), Python/TS, VUDA MCP, masking, thresholds, CI/CD | 1,056 | playwright, visual-regression, screenshot, testing, e2e, vuda, vrt |
 | [Thunderbird Extension](extend/thunderbird-extension/SKILL.md) | Build MailExtensions for Thunderbird - messenger.* APIs, compose, ATN | 1,067 | thunderbird, mailextension, email-extension, mozilla, atn, messenger-api |
@@ -34,7 +34,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [android-apk-patch](frameworks/android-apk-patch/SKILL.md) | Modify, repackage, test Android APKs - split APK handling, GApps workarounds, signing, Frida instrumentation, redroid/Waydroid testing | 1,565 | android, apk, patching, smali, signing, split-apk, gapps, frida, redroid, waydroid |
 | [BPCore Engine](frameworks/bpcore-engine/SKILL.md) | Lua game framework for GBA - API reference, sprites, entities, collision, audio, save/load SRAM, multiplayer protocol | 873 | lua, gba, game-engine, gameboy-advance |
 | [Celery](frameworks/celery/SKILL.md) | Distributed task queue - Redis/RabbitMQ brokers, periodic tasks, Django integration | 1,250 | python, task-queue, async, distributed, celery |
-| [Django (Security)](frameworks/django-security/SKILL.md) | CSRF protection, authentication, sessions, login/logout, password handling, middleware, protected views | 1,489 | python, django, web-framework, async, hub |
+| [Django (Security)](frameworks/django-security/SKILL.md) | CSRF, authentication, custom permission backends, per-object permissions, sessions, password handling, middleware | 1,662 | python, django, web-framework, async, hub |
 | [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,567 | python, django, bolt, api, rust, performance, async |
 | [Django Celery](frameworks/django-celery/SKILL.md) | Django Celery integration - distributed tasks, django-celery-beat scheduling, monitoring | ~700 | python, django, celery, task-queue, periodic-tasks, django-celery-beat |
 | [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, template tags, middleware, CSRF protection | 415 | django, htmx, python, web, frontend, partial-rendering |
@@ -55,10 +55,10 @@ This repository provides reusable skill definitions that can be loaded into AI c
 |   ↳ [pyqt-testing](frameworks/pyqt/testing/SKILL.md) | Testing - pytest-qt, qtbot, waitSignal, fixtures | 444 | python, qt, pyqt, testing, pytest |
 |   ↳ [pyqt-threading](frameworks/pyqt/threading/SKILL.md) | Threading - QThread, QThreadPool, QRunnable, moveToThread, thread safety, lifecycle, pitfalls | 931 | python, qt, pyqt, threading, concurrency |
 |   ↳ [pyqt-widgets](frameworks/pyqt/widgets/SKILL.md) | QtWidgets - buttons, inputs, containers, item views, layouts | 610 | python, qt, pyqt, widgets, gui |
-| [pytest](frameworks/pytest/SKILL.md) | Python testing framework - fixtures, parametrization, asyncio, Django, mocking, coverage, parallel | 1,481 | python, testing, tdd, fixtures, unit-test |
+| [pytest](frameworks/pytest/SKILL.md) | Python testing - fixtures, parametrization, asyncio, Django, async Django views, sync_to_async bridge, mocking, coverage, parallel | 1,595 | python, testing, tdd, fixtures, unit-test |
 | [Qt C++](frameworks/qt-cpp/SKILL.md) | Cross-platform desktop apps - signals/slots, QML, threading, CMake, deployment | 1,204 | qt, c++, gui, desktop, qt6, cmake, cross-platform, qml |
 | [ratatui](frameworks/ratatui/SKILL.md) | Rust TUI framework - widgets, layouts, design principles, accessibility, MVU architecture, ecosystem, recipes | 2,099 | rust, tui, terminal, cli, user-interface, ecosystem |
-| [SQLAlchemy](frameworks/sqlalchemy/SKILL.md) | Python SQL toolkit and ORM - advanced queries, CTEs, window functions, bulk ops, transaction management, Alembic migrations, debugging | 1,567 | python, orm, database, sql, alembic, async |
+| [SQLAlchemy](frameworks/sqlalchemy/SKILL.md) | Python SQL toolkit/ORM - queries, CTEs, window functions, async, Alembic, migration testing, PostgreSQL optimization, non-integer PKs | 1,619 | python, orm, database, sql, alembic, async |
 | [Tailwind CSS](frameworks/tailwind/SKILL.md) | Utility-first CSS framework v4 - CSS-first config, @theme directive, Oxide engine | 798 | css, frontend, responsive, design-system, utility-first |
 | [TurboDRF](frameworks/turbodrf/SKILL.md) | Django REST mixin - TurboDRFMixin, auto CRUD, role-based permissions, tenancy, security gates | 713 | python, django, rest-api, turbodrf, permissions |
 
@@ -76,7 +76,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 
 | Skill | Description | Lines | Tags |
 |-------|-------------|-------|------|
-| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Common Rust development pitfalls - compiler errors, struct constructors, test organization, coverage enforcement | 749 | rust, pitfalls, best-practices, common-errors, testing |
+| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Rust pitfalls - compiler errors, struct constructors, test organization, module splitting, thiserror error design, panic elimination | 1,208 | rust, pitfalls, best-practices, common-errors, testing |
 
 ## Skill Format
 

@@ -1033,16 +1033,6 @@ def upgrade():
     # Drop index
     op.drop_index('ix_users_email', table_name='users')
     
-    # Create foreign key
-    op.create_foreign_key(
-        'fk_articles_author',
-        'articles',
-        'users',
-        ['author_id'],
-        ['id'],
-        ondelete='CASCADE',
-    )
-    
     # Drop foreign key
     op.drop_constraint('fk_articles_author', 'articles', type_='foreignkey')
     
@@ -1050,172 +1040,258 @@ def upgrade():
     op.execute("UPDATE users SET is_active = TRUE")
 ```
 
-## Best Practices
+## Migration Testing
 
-### 1. Use Mapped Types (SQLAlchemy 2.0)
+Migrations are production-critical code. Untested migrations cause downtime.
+
+### Why test migrations
+
+- Migrations run on every deployment
+- Schema changes are irreversible in production
+- Data loss from bad migrations is catastrophic
+
+### Testing upgrade path
 
 ```python
-# Good: Mapped types with type hints
+# tests/test_migrations/test_001_add_email_column.py
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
+
+@pytest.fixture
+def alembic_config():
+    return Config("alembic.ini")
+
+def test_upgrade_adds_email_column(db_engine, alembic_config):
+    """Test that upgrade adds the email column."""
+    command.upgrade(alembic_config, "head")
+    
+    with db_engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info(users)"))
+        columns = [row[1] for row in result]
+        assert "email" in columns
+
+def test_downgrade_removes_email_column(db_engine, alembic_config):
+    """Test that downgrade removes the email column."""
+    command.upgrade(alembic_config, "head")
+    command.downgrade(alembic_config, "-1")
+    
+    with db_engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info(users)"))
+        columns = [row[1] for row in result]
+        assert "email" not in columns
+```
+
+### Testing both directions
+
+Always test **upgrade AND downgrade** — downgrades are your emergency rollback.
+
+### Migration test fixtures
+
+```python
+@pytest.fixture
+def db_engine():
+    """Fresh SQLite DB for each migration test."""
+    engine = create_engine("sqlite:///:memory:")
+    yield engine
+    engine.dispose()
+```
+
+### Migration coverage
+
+Measuring which migration files have tests:
+
+```python
+# tests/conftest.py
+import os
+from pathlib import Path
+
+def test_all_migrations_have_tests():
+    """Ensure every migration file has a corresponding test."""
+    migration_dir = Path("alembic/versions")
+    test_dir = Path("tests/test_migrations")
+    
+    migrations = list(migration_dir.glob("*.py"))
+    for migration in migrations:
+        # Check if a test file exists
+        migration_id = migration.stem.split("_")[0]
+        test_files = list(test_dir.glob(f"*{migration_id}*"))
+        assert test_files, f"No test for migration {migration.name}"
+```
+
+### Common Pitfalls
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Migration tests modify shared DB | No isolation | Use in-memory SQLite per test |
+| Downgrade not tested | Only testing upgrade | Always test both directions |
+| Tests pass locally, fail in CI | SQLite vs PostgreSQL differences | Test against PostgreSQL in CI |
+
+## PostgreSQL Query Optimization
+
+### EXPLAIN ANALYZE with SQLAlchemy
+
+```python
+from sqlalchemy import text
+
+def analyze_query(session, query):
+    """Run EXPLAIN ANALYZE on a query."""
+    compiled = query.statement.compile(session.bind)
+    explain_sql = text(f"EXPLAIN ANALYZE {compiled}")
+    result = session.execute(explain_sql).fetchall()
+    for row in result:
+        print(row[0])
+```
+
+### Index strategy
+
+When to add indexes:
+
+```python
+# Add index for frequently filtered columns
 class User(Base):
     __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    email = Column(String, index=True)  # Frequently filtered
+    created_at = Column(DateTime, index=True)  # Frequently sorted
+
+# Composite index for multi-column filters
+class Event(Base):
+    __tablename__ = "events"
+    __table_args__ = (
+        Index("ix_event_user_date", "user_id", "created_at"),  # Composite
+    )
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime)
+```
+
+### Read-only transactions for metrics endpoints
+
+```python
+from sqlalchemy.orm import Session
+
+def get_metrics(session: Session):
+    """Read-only metrics query — no writes, no locks."""
+    # Use execution_options for read-only
+    result = session.execute(
+        text("SELECT status, COUNT(*) FROM services WHERE active = true GROUP BY status"),
+        execution_options={"read_only": True}
+    )
+    return result.fetchall()
+```
+
+### Query plan optimization
+
+Detecting and fixing slow queries:
+
+```python
+# Check for sequential scans (should use index scan)
+def check_query_plan(session, query):
+    compiled = query.statement.compile(session.bind)
+    plan = session.execute(text(f"EXPLAIN {compiled}")).fetchall()
+    plan_text = "\n".join(row[0] for row in plan)
     
-    id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(50))
-    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    articles: Mapped[List["Article"]] = relationship()
+    if "Seq Scan" in plan_text:
+        logger.warning(f"Sequential scan detected — consider adding index:\n{plan_text}")
+    return plan_text
 ```
 
-### 2. Session Scope
+### Partitioning large tables
+
+Time-series partitioning pattern:
 
 ```python
-# Good: Use context managers
-with SessionLocal() as session:
-    user = session.execute(select(User)).scalar()
-    session.commit()
-
-# Bad: Forget to close
-session = SessionLocal()
-user = session.execute(select(User)).scalar()
-# session.close() missing!
+# PostgreSQL native partitioning via raw SQL in migration
+def upgrade():
+    op.execute("""
+        CREATE TABLE events (
+            id SERIAL,
+            created_at TIMESTAMP NOT NULL,
+            data JSONB
+        ) PARTITION BY RANGE (created_at);
+    """)
+    op.execute("""
+        CREATE TABLE events_2026_01 
+        PARTITION OF events 
+        FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+    """)
 ```
 
-### 3. Eager Loading
+### Common Pitfalls
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Slow /metrics endpoint | Loading all history | Read-only transaction with filtered query |
+| Sequential scan on large table | Missing index | Add index on filtered column |
+| Lock contention | Read-write transaction for read-only query | Use `read_only` execution option |
+| N+1 queries | Lazy loading in loop | Use `joinedload()` or `selectinload()` |
+
+## Non-Integer Primary Keys
+
+### UUID primary keys
 
 ```python
-# Good: Explicit eager loading
-stmt = select(Author).options(selectinload(Author.articles))
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 
-# Bad: N+1 query problem
-authors = session.execute(select(Author)).scalars().all()
-for author in authors:
-    print(author.articles)  # Triggers query for each author!
+class Email(Base):
+    __tablename__ = "emails"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subject = Column(String(255))
 ```
 
-### 4. Use expire_on_commit=False
+### String primary keys
+
+Custom ID generation pattern:
 
 ```python
-# Good: Can access attributes after commit
-SessionLocal = sessionmaker(
-    bind=engine,
-    expire_on_commit=False,  # Access attributes after commit
-)
+import secrets
 
-with SessionLocal() as session:
-    user = User(username="john")
-    session.add(user)
-    session.commit()
-    print(user.username)  # Works with expire_on_commit=False
+def generate_id(prefix: str = "") -> str:
+    """Generate a unique string ID."""
+    return f"{prefix}{secrets.token_hex(8)}"
+
+class Email(Base):
+    __tablename__ = "emails"
+    id = Column(String(64), primary_key=True, default=lambda: generate_id("email_"))
+    subject = Column(String(255))
 ```
 
-### 5. Connection Pooling
+### Auto-generation strategies
 
 ```python
-# Good: Configure pool for production
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,  # Check connection health
-    pool_recycle=3600,   # Recycle old connections
-)
+# UUID with server_default (PostgreSQL)
+class User(Base):
+    __tablename__ = "users"
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+# String ID with Python-side default
+class Service(Base):
+    __tablename__ = "services"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
 ```
 
-## Common Issues
-
-### Issue: Detached Instance
+### Composite primary keys
 
 ```python
-# Problem: Accessing relationship on detached object
-with SessionLocal() as session:
-    user = session.get(User, 1)
-# session closed, user is detached
-print(user.articles)  # DetachedInstanceError!
-
-# Solution: Eager load or merge
-with SessionLocal() as session:
-    user = session.execute(
-        select(User).options(selectinload(User.articles)).where(User.id == 1)
-    ).scalar_one()
-    # Now user.articles is loaded
+# Multi-column primary key
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    role_id = Column(Integer, ForeignKey("roles.id"), primary_key=True)
+    permission_id = Column(Integer, ForeignKey("permissions.id"), primary_key=True)
+    # No separate id column — composite PK
 ```
 
-### Issue: Flush vs Commit
+### Common Pitfalls
 
-```python
-# flush() - Send SQL to database, don't commit transaction
-session.add(user)
-session.flush()  # Get user.id from database
-profile = UserProfile(user_id=user.id)
-session.add(profile)
-session.commit()  # Commit both
-
-# commit() - Flush and commit transaction
-session.add(user)
-session.commit()  # All changes persisted
-```
-
-### Issue: Session Thread Safety
-
-```python
-# Problem: Session is not thread-safe
-# Each thread needs its own session
-
-# Solution: Use scoped_session
-from sqlalchemy.orm import scoped_session
-
-Session = scoped_session(sessionmaker(bind=engine))
-
-# In each thread:
-session = Session()
-# Use session...
-Session.remove()  # Clean up
-```
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| ID collision with string IDs | Weak random generator | Use `secrets` module, not `random` |
+| UUID not stored efficiently | Storing as String | Use `UUID(as_uuid=True)` with PostgreSQL |
+| Can't auto-increment | Non-integer PK | Set `default=` or `server_default=` |
 
 ## Advanced Query Patterns
-
-### Aggregation
-
-```python
-from sqlalchemy import func, select
-
-# Count
-stmt = select(func.count(User.id))
-total = session.scalar(stmt)
-
-# Sum / Average
-stmt = select(func.sum(Order.amount), func.avg(Order.amount))
-total, avg = session.execute(stmt).one()
-
-# Group by
-stmt = (
-    select(User.name, func.count(Post.id).label("post_count"))
-    .join(Post)
-    .group_by(User.name)
-    .order_by(func.count(Post.id).desc())
-)
-for name, count in session.execute(stmt):
-    print(f"{name}: {count} posts")
-```
-
-### Subqueries
-
-```python
-from sqlalchemy import subquery
-
-# Subquery: users with more than 5 posts
-post_count_sq = (
-    select(Post.author_id, func.count(Post.id).label("cnt"))
-    .group_by(Post.author_id)
-    .subquery()
-)
-
-stmt = (
-    select(User)
-    .join(post_count_sq, User.id == post_count_sq.c.author_id)
-    .where(post_count_sq.c.cnt > 5)
-)
-active_users = session.scalars(stmt).all()
-```
 
 ### CTEs (Common Table Expressions)
 
@@ -1387,98 +1463,74 @@ session.execute(insert(User), [
 session.commit()
 ```
 
-## Alembic Migrations Workflow
+## Best Practices
 
-### Initial Setup
-
-```bash
-# Install alembic
-pip install alembic
-
-# Initialize in project
-alembic init alembic
-
-# Edit alembic/env.py to import your Base metadata
-# from myapp.models import Base
-# target_metadata = Base.metadata
-```
-
-### autogenerate Configuration
+### 1. Use Mapped Types (SQLAlchemy 2.0)
 
 ```python
-# alembic/env.py
-from sqlalchemy import engine_from_config
-from myapp.models import Base
-
-target_metadata = Base.metadata
-
-def run_migrations_online():
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-    )
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,       # Detect column type changes
-            compare_server_default=True,  # Detect default value changes
-        )
-        with context.begin_transaction():
-            context.run_migrations()
+# Good: Mapped types with type hints
+class User(Base):
+    __tablename__ = "users"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50))
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    articles: Mapped[List["Article"]] = relationship()
 ```
 
-### Common Migration Commands
-
-```bash
-# Create a new migration (auto-detect changes)
-alembic revision --autogenerate -m "add user table"
-
-# Apply all pending migrations
-alembic upgrade head
-
-# Rollback last migration
-alembic downgrade -1
-
-# Rollback to specific revision
-alembic downgrade abc123
-
-# Show current revision
-alembic current
-
-# Show migration history
-alembic history
-
-# Generate SQL without applying
-alembic upgrade head --sql
-```
-
-### Custom Migration Operations
+### 2. Session Scope
 
 ```python
-"""add user email column
+# Good: Use context managers
+with SessionLocal() as session:
+    user = session.execute(select(User)).scalar()
+    session.commit()
 
-Revision ID: xyz789
-"""
-from alembic import op
-import sqlalchemy as sa
+# Bad: Forget to close
+session = SessionLocal()
+user = session.execute(select(User)).scalar()
+# session.close() missing!
+```
 
-def upgrade():
-    # Add column
-    op.add_column("users", sa.Column("email", sa.String(255), nullable=True))
+### 3. Eager Loading
 
-    # Populate with data
-    op.execute("UPDATE users SET email = name || '@example.com' WHERE email IS NULL")
+```python
+# Good: Explicit eager loading
+stmt = select(Author).options(selectinload(Author.articles))
 
-    # Make non-nullable
-    op.alter_column("users", "email", nullable=False)
+# Bad: N+1 query problem
+authors = session.execute(select(Author)).scalars().all()
+for author in authors:
+    print(author.articles)  # Triggers query for each author!
+```
 
-    # Add unique constraint
-    op.create_unique_constraint("uq_users_email", "users", ["email"])
+### 4. Use expire_on_commit=False
 
-def downgrade():
-    op.drop_constraint("uq_users_email", "users", type_="unique")
-    op.drop_column("users", "email")
+```python
+# Good: Can access attributes after commit
+SessionLocal = sessionmaker(
+    bind=engine,
+    expire_on_commit=False,  # Access attributes after commit
+)
+
+with SessionLocal() as session:
+    user = User(username="john")
+    session.add(user)
+    session.commit()
+    print(user.username)  # Works with expire_on_commit=False
+```
+
+### 5. Connection Pooling
+
+```python
+# Good: Configure pool for production
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,  # Check connection health
+    pool_recycle=3600,   # Recycle old connections
+)
 ```
 
 ## Common Issues & Debugging

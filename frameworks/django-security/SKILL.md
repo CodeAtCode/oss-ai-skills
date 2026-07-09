@@ -357,6 +357,179 @@ AUTHENTICATION_BACKENDS = [
 
 ---
 
+## Custom Permission Backends
+
+### Why Custom Backends
+
+Django's built-in `ModelBackend` only handles model-level permissions (`add`, `change`, `delete`, `view`). Custom backends add:
+- **Per-object permissions** (row-level authorization)
+- **External auth systems** (LDAP, OAuth providers)
+- **Permission composition** (multiple backends chained)
+
+### Custom Backend Implementation
+
+```python
+# myapp/backends.py
+from django.contrib.auth.backends import BaseBackend
+from django.contrib.auth.models import User
+
+class ObjectPermissionBackend(BaseBackend):
+    """Backend for per-object permissions."""
+    
+    def has_perm(self, user_obj, perm, obj=None):
+        if obj is None:
+            # Fall back to model-level check
+            return None
+        
+        app_label, codename = perm.split('.')
+        
+        # Check object-level permission
+        return self._check_object_perm(user_obj, obj, codename)
+    
+    def _check_object_perm(self, user_obj, obj, action):
+        """Check if user can perform action on specific object."""
+        if action == 'view':
+            return self._can_view(user_obj, obj)
+        if action == 'change':
+            return self._can_change(user_obj, obj)
+        if action == 'delete':
+            return self._can_delete(user_obj, obj)
+        return False
+    
+    def _can_view(self, user, obj):
+        if hasattr(obj, 'owner'):
+            return obj.owner_id == user.id or user.is_staff
+        return True
+    
+    def _can_change(self, user, obj):
+        if hasattr(obj, 'owner'):
+            return obj.owner_id == user.id
+        return user.is_staff
+```
+
+### Configuration
+
+Chaining multiple backends:
+
+```python
+# settings.py
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # Default model-level
+    'myapp.backends.ObjectPermissionBackend',      # Custom object-level
+]
+```
+
+Django tries each backend in order; first `True` or `False` wins. `None` means "I don't know, ask the next backend".
+
+### Per-Object Permissions
+
+The row-level authorization pattern:
+
+```python
+from django.contrib.auth.decorators import permission_required
+from django.shortcuts import get_object_or_404
+
+@permission_required('myapp.change_document')
+def edit_document(request, pk):
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check object-level permission
+    if not request.user.has_perm('myapp.change_document', document):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+    
+    # Proceed with edit...
+```
+
+### Permission Flow Design
+
+The request → check → grant/deny pattern:
+
+```python
+# myapp/permissions.py
+class PermissionFlow:
+    """Centralized permission checking with audit logging."""
+    
+    def __init__(self, user):
+        self.user = user
+    
+    def can_access(self, resource, action, obj=None):
+        """Check permission and log the decision."""
+        allowed = self.user.has_perm(
+            f'{resource}.{action}', 
+            obj=obj
+        )
+        
+        if not allowed:
+            # Log denied access for audit trail
+            import logging
+            logger = logging.getLogger('permissions')
+            logger.warning(
+                f"Permission denied: user={self.user.id}, "
+                f"resource={resource}, action={action}, obj={obj}"
+            )
+        
+        return allowed
+```
+
+### Class-Based View Mixin
+
+Reusable permission checks in CBVs:
+
+```python
+from django.core.exceptions import PermissionDenied
+
+class ObjectPermissionMixin:
+    """Mixin for per-object permission checks in CBVs."""
+    permission_required = None  # e.g., 'myapp.change_document'
+    
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if self.permission_required:
+            if not self.request.user.has_perm(
+                self.permission_required, obj
+            ):
+                raise PermissionDenied
+        return obj
+```
+
+### Testing Permissions
+
+How to test custom backends:
+
+```python
+from django.test import TestCase
+from django.contrib.auth.models import User, Permission
+from myapp.models import Document
+
+class ObjectPermissionTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user('owner', 'o@e.com', 'pass')
+        self.other = User.objects.create_user('other', 'x@e.com', 'pass')
+        self.doc = Document.objects.create(title='Test', owner=self.owner)
+    
+    def test_owner_can_change(self):
+        self.assertTrue(
+            self.owner.has_perm('myapp.change_document', self.doc)
+        )
+    
+    def test_other_cannot_change(self):
+        self.assertFalse(
+            self.other.has_perm('myapp.change_document', self.doc)
+        )
+```
+
+### Common Pitfalls
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `has_perm` returns True for all | Backend returns `True` instead of `None` for unknown perms | Return `None` when backend doesn't handle the permission |
+| Object perm not checked | Called `has_perm(perm)` without `obj` arg | Always pass `obj=obj` for object checks |
+| Backend not called | Not in `AUTHENTICATION_BACKENDS` | Add backend to settings list |
+| Permissions cached incorrectly | Django caches per-user perms | Call `user_obj._perm_cache.clear()` if needed |
+
+---
+
 ## Sessions
 
 ### Session Configuration
