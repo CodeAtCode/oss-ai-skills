@@ -298,6 +298,65 @@ class ProductFilter(django_filters.FilterSet):
 
 ---
 
+## Composable QuerySet Methods (FilterSet Alternative)
+
+When filtering is driven by code paths rather than user-supplied query params,
+define a custom `QuerySet` with one method per `WHERE` clause. The view reads
+like a sentence, and each method is independently testable.
+
+```python
+from django.db import models
+
+class EventQuerySet(models.QuerySet):
+    def approved(self):
+        return self.filter(approved_at__isnull=False)
+
+    def future(self):
+        today = timezone.localdate()
+        return self.filter(end__gt=self._midnight(today))
+
+    def with_tags(self, tags):
+        if not tags:
+            return self
+        return self.filter(tags__name__in=tags).distinct()
+
+    def is_free(self, free):
+        if free is None:
+            return self
+        return self.filter(price=0) if free else self
+
+class Event(models.Model):
+    objects = EventQuerySet.as_manager()
+    # ...
+```
+
+Usage in a view — each method returns a queryset, so they chain naturally:
+
+```python
+def event_list(request, tab):
+    qs = (
+        Event.objects.approved()
+        .for_tab(tab)
+        .with_festivals(tab_params.festival_slugs)
+        .is_free(tab_params.free)
+    )
+    return render(request, 'events/list.html', {'events': qs})
+```
+
+### When to choose QuerySet methods vs FilterSet
+
+| Need | Pick |
+|------|------|
+| User-facing filters from query params, DRF integration, auto-generated form | `FilterSet` |
+| Code-driven filtering, readable chains, no query-param binding | Custom `QuerySet` methods |
+| Both | Combine: `FilterSet` for the API surface, `QuerySet` methods for internal reuse |
+
+Guidelines for QuerySet methods:
+- Return `self` (not `None`) when the filter is a no-op, so chains never break.
+- Guard each method against its argument being empty/None — callers should not
+  have to branch before calling.
+- Keep methods single-purpose; compose in the view rather than adding flags.
+
 ## DRF Tips & Patterns
 
 ### FilterBackend per Action
@@ -443,3 +502,4 @@ class ProductFilter(django_filters.FilterSet):
 - **DRF Integration**: https://django-filter.readthedocs.io/en/stable/guide/rest_framework.html
 - **Tips**: https://django-filter.readthedocs.io/en/stable/guide/tips.html
 - **GitHub**: https://github.com/carltongibson/django-filter
+- **jvns.ca – More nice Django things (composable QuerySet methods)**: https://jvns.ca/blog/2026/07/21/more-nice-django-things/

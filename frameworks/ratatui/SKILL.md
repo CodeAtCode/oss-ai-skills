@@ -1879,6 +1879,63 @@ Key features:
 - Run Ratatui apps in the browser
 - Demo available at https://ratatui.github.io/ratzilla/demo/
 
+### tui-logger
+
+A logger and smart widget for ratatui — captures `log` records into a circular
+buffer and renders them in a scrollable pane with a per-target level selector.
+
+```toml
+# Cargo.toml
+[dependencies]
+tui-logger = "0.14"
+```
+
+Initialize once at startup, then render the widget in your draw loop:
+
+```rust
+use tui_logger::{init_logger, TuiLoggerWidget};
+
+fn main() {
+    init_logger(log::LevelFilter::Trace).unwrap();
+    tui_logger::set_default_level(log::LevelFilter::Debug);
+    // ... app loop ...
+}
+
+// In the draw closure:
+frame.render_widget(
+    TuiLoggerWidget::default()
+        .block(Block::bordered().title("Logs")),
+    area,
+);
+```
+
+Key features:
+- Hot buffer (1000 entries) + main buffer (10000) so logging never blocks the UI thread — `move_events()` drains hot into main every 10ms
+- Per-target capture and display levels, toggled at runtime via the target selector widget
+- `slog` and `tracing-subscriber` support (features `slog-support`, `tracing-support`)
+- `wait()` / `wait_timeout()` (feature `waiter`) for event-loop-driven redraws without polling
+- Env-var config (`RUST_LOG`) via `set_env_filter_from_env()`
+- Custom formatters via `LogFormatter`
+- File logging alongside the widget
+
+Smart widget key commands (driven by feeding `TuiWidgetEvent` to `TuiWidgetState::transition()`):
+
+| Key | Action |
+|-----|--------|
+| `h` | Toggle target selector visibility |
+| `f` | Focus selected target only |
+| `+` / `-` | Increase / decrease captured level |
+| `Right` / `Left` | Increase / decrease shown level |
+| `PageUp` / `PageDown` | Page mode scroll through history |
+| `Esc` | Exit page mode |
+| `Space` | Hide targets with no enabled level |
+
+Run the demo: `cargo run --example demo --features crossterm`
+
+- **Repository**: https://github.com/gin66/tui-logger
+- **Docs**: https://docs.rs/tui-logger/
+- **DeepWiki**: https://deepwiki.com/gin66/tui-logger
+
 ## Third-Party Widgets Showcase
 
 Ratatui has a vibrant ecosystem of third-party widgets:
@@ -2517,6 +2574,7 @@ KeyCode::Char('d') => state.show_debug = !state.show_debug,
 - **Tachyonfx (Animations)**: https://ratatui.rs/ecosystem/tachyonfx/
 - **Mousefood (Embedded)**: https://ratatui.rs/ecosystem/mousefood/
 - **Ratzilla (WebAssembly)**: https://ratatui.rs/ecosystem/ratzilla/
+- **tui-logger (Logging)**: https://github.com/gin66/tui-logger
 - **Third-Party Widgets**: https://ratatui.rs/showcase/third-party-widgets/
 
 ### Official Recipes

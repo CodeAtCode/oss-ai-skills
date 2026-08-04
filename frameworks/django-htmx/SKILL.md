@@ -134,6 +134,35 @@ def environment(**options):
 {{ htmx_script() }}
 ```
 
+### Built-in Filters Useful with HTMX
+
+`{% querystring %}` (Django 4.1+) rebuilds the current query string with one
+key changed — ideal for htmx filter links that re-render a list partial:
+
+```django
+{% load django_htmx %}
+
+<!-- keep all current filters, flip `outdoors` off -->
+<a hx-get="{% querystring outdoors=None %}" hx-target="#list"
+   hx-push-url="true">hide outdoors</a>
+
+<!-- paginate by changing only `page` -->
+<a hx-get="{% querystring page=page.next %}" hx-target="#list">next</a>
+```
+
+`json_script` safely embeds a Python dict as a `<script>` tag, useful for
+seeding htmx-driven widgets with initial state:
+
+```django
+{{ row.config|json_script:"row-config" }}
+<script>
+  const cfg = JSON.parse(document.getElementById('row-config').textContent);
+  htmx.trigger('#row', 'config-ready', cfg);
+</script>
+```
+
+Other high-signal built-ins: `urlize`, `linebreaksbr`, `date:"M j"`.
+
 ## HTTP Response Classes
 
 ### HttpResponseClientRedirect
@@ -360,6 +389,30 @@ Always include CSRF token in htmx requests:
 
 ### Caching with HTMX
 
+Keep the **cached template loader** on (`django.template.loaders.cached.Loader`).
+It is on by default, but it is easy to disable by accident while tweaking
+`TEMPLATES` — without it Django recompiles every template on every render, which
+ dominates CPU for server-rendered htmx partials.
+
+```python
+# settings.py — the safe shape. Wrap app_dirs in cached.Loader.
+TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "DIRS": [BASE_DIR / "templates"],
+    "OPTIONS": {
+        "loaders": [
+            ("django.template.loaders.cached.Loader", [
+                "django.template.loaders.app_directories.Loader",
+                "django.template.loaders.filesystem.Loader",
+            ]),
+        ],
+    },
+}]
+```
+
+If a CPU profile (`py-spy record -o profile.svg --pid <django_pid>`) shows
+`django.template.base.compile` near the top, the cached loader is off.
+
 Add appropriate Vary headers for cacheable responses:
 
 ```python
@@ -414,3 +467,5 @@ class HttpRequest(HttpRequestBase):
 - **Official Documentation**: https://django-htmx.readthedocs.io/
 - **GitHub Repository**: https://github.com/adamchainz/django-htmx
 - **htmx Reference**: https://htmx.org/reference/
+- **jvns.ca – More nice Django things**: https://jvns.ca/blog/2026/07/21/more-nice-django-things/
+- **HN discussion**: https://news.ycombinator.com/item?id=48997828

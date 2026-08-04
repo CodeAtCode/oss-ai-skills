@@ -37,12 +37,12 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [Django (Security)](frameworks/django-security/SKILL.md) | CSRF, authentication, custom permission backends, per-object permissions, sessions, password handling, middleware | 1,662 | python, django, web-framework, async, hub |
 | [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,567 | python, django, bolt, api, rust, performance, async |
 | [Django Celery](frameworks/django-celery/SKILL.md) | Django Celery integration - distributed tasks, django-celery-beat scheduling, monitoring | ~700 | python, django, celery, task-queue, periodic-tasks, django-celery-beat |
-| [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, template tags, middleware, CSRF protection | 415 | django, htmx, python, web, frontend, partial-rendering |
+| [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, querystring tag, json_script, cached loader, CSRF protection | 468 | django, htmx, python, web, frontend, partial-rendering |
 | [Django Ninja](frameworks/django-ninja/SKILL.md) | Fast REST APIs with Pydantic - schemas, authentication, pagination, OpenAPI docs | 1,869 | python, django, rest-api, pydantic, openapi, type-safe |
 | [Django Storages](frameworks/django-storages/SKILL.md) | Django cloud storage - S3, Azure, Google Cloud, boto3, file storage backends | ~800 | python, django, storage, s3, azure, gcs, cloud |
 | [Django Unfold](frameworks/django-unfold/SKILL.md) | Modern Django admin theme - customization, components, actions, filters, integrations | 653 | python, django, admin, unfold, theme, dashboard |
 | [django-allauth](frameworks/django-allauth/SKILL.md) | django-allauth package - local accounts, OAuth, email verification, MFA | ~700 | python, django, authentication, oauth, mfa, allauth |
-| [django-filter](frameworks/django-filter/SKILL.md) | Django filtering library - querysets, DRF integration, custom filters, FilterSet | 451 | django, django-filter, filtering, django-rest-framework, queryset |
+| [django-filter](frameworks/django-filter/SKILL.md) | Django filtering library - querysets, DRF integration, custom filters, FilterSet, composable QuerySet methods | 503 | django, django-filter, filtering, django-rest-framework, queryset |
 | [httpx](frameworks/httpx/SKILL.md) | Modern async HTTP client - sync/async API, HTTP/2, connection pooling, retries | ~1,500 | python, http, async, client, network |
 | [LlamaIndex](frameworks/llama-index/SKILL.md) | LLM applications - RAG, retrievers, agents, vector stores, streaming, evaluation | 1,130 | python, llm, rag, llamaindex, ai, vector-store, agents |
 | [Pydantic](frameworks/pydantic/SKILL.md) | Data validation - TypeAdapter, RootModel, discriminated unions, error handling, serialization, settings, FastAPI | 1,499 | python, validation, pydantic, serialization, settings |
@@ -57,7 +57,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 |   ↳ [pyqt-widgets](frameworks/pyqt/widgets/SKILL.md) | QtWidgets - buttons, inputs, containers, item views, layouts | 610 | python, qt, pyqt, widgets, gui |
 | [pytest](frameworks/pytest/SKILL.md) | Python testing - fixtures, parametrization, asyncio, Django, async Django views, sync_to_async bridge, mocking, coverage, parallel | 1,595 | python, testing, tdd, fixtures, unit-test |
 | [Qt C++](frameworks/qt-cpp/SKILL.md) | Cross-platform desktop apps - signals/slots, QML, threading, CMake, deployment | 1,204 | qt, c++, gui, desktop, qt6, cmake, cross-platform, qml |
-| [ratatui](frameworks/ratatui/SKILL.md) | Rust TUI framework - widgets, layouts, design principles, accessibility, MVU architecture, ecosystem, recipes | 2,099 | rust, tui, terminal, cli, user-interface, ecosystem |
+| [ratatui](frameworks/ratatui/SKILL.md) | Rust TUI framework - widgets, layouts, design principles, accessibility, MVU architecture, ecosystem, tui-logger, recipes | 2,598 | rust, tui, terminal, cli, user-interface, ecosystem |
 | [SQLAlchemy](frameworks/sqlalchemy/SKILL.md) | Python SQL toolkit/ORM - queries, CTEs, window functions, async, Alembic, migration testing, PostgreSQL optimization, non-integer PKs | 1,619 | python, orm, database, sql, alembic, async |
 | [Tailwind CSS](frameworks/tailwind/SKILL.md) | Utility-first CSS framework v4 - CSS-first config, @theme directive, Oxide engine | 798 | css, frontend, responsive, design-system, utility-first |
 | [TurboDRF](frameworks/turbodrf/SKILL.md) | Django REST mixin - TurboDRFMixin, auto CRUD, role-based permissions, tenancy, security gates | 713 | python, django, rest-api, turbodrf, permissions |
@@ -69,7 +69,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [ast-grep](tool/ast-grep/SKILL.md) | AST-based code search and rewriting - structural patterns, linting, refactoring, multi-language | 531 | ast-grep, code-search, linting, refactoring, cli, ast |
 | [Docker](tool/docker/SKILL.md) | Containers - Dockerfile, docker-compose, BuildKit, multi-stage builds, production, CI/CD, security | 432 | docker, docker-compose, containerization, deployment, ci-cd |
 | [Redis](tool/redis/SKILL.md) | In-memory database - caching, pub/sub, sessions, rate limiting, data structures | 315 | redis, database, caching, pub-sub, sessions, rate-limiting |
-| [SQLite](tool/sqlite/SKILL.md) | Embedded database - SQL queries, schema design, Python integration, FTS5, optimization, concurrent access | 814 | sqlite, database, sql, embedded, python |
+| [SQLite](tool/sqlite/SKILL.md) | Embedded database - SQL queries, schema design, Python integration, FTS5, ANALYZE, Litestream/restic backups, concurrent access | 922 | sqlite, database, sql, embedded, python |
 | [Waydroid](tool/waydroid/SKILL.md) | Android on Linux - container-based Android with Wayland, GPU acceleration, GAPPS | ~657 | waydroid, android, container, linux, wayland, gapps |
 
 ### Languages

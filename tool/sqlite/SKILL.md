@@ -375,6 +375,25 @@ PRAGMA index_list(users);
 PRAGMA index_info(idx_users_email);
 ```
 
+### Statistics with ANALYZE
+
+The query planner picks indexes based on table statistics. Without them it can
+choose catastrophically bad plans — an FTS5 query on a few thousand rows can go
+from 5s to 0.05s after a single `ANALYZE`.
+
+```sql
+-- Gather statistics for the query planner
+ANALYZE;
+
+-- Re-run after bulk loads, schema changes, or significant data drift
+-- Inspect stored stats:
+SELECT * FROM sqlite_stat1;
+SELECT * FROM sqlite_stat4;  -- if SQLITE_ENABLE_STAT4
+```
+
+Without `ANALYZE`, a 4000-row FTS5 table can pick an accidentally-quadratic
+plan. Run it once after load, then schedule periodically.
+
 ### Bulk Operations
 
 ```python
@@ -396,21 +415,62 @@ conn.execute("PRAGMA journal_mode = WAL")
 
 ## Backups
 
+### Online Backup (Python API)
+
 ```python
 import sqlite3
 
 def backup_database(src_path, dst_path):
     src = sqlite3.connect(src_path)
     dst = sqlite3.connect(dst_path)
-    
     src.backup(dst)
-    
     dst.close()
     src.close()
-
-# Or via command line
-# sqlite3 app.db ".backup backup.db"
 ```
+
+### VACUUM INTO (snapshot without holding a long lock)
+
+`VACUUM INTO` produces a clean, defragmented copy in one statement. Pair with
+`gzip` and an off-site uploader (restic, rsync, S3 CLI) for nightly snapshots.
+
+```bash
+sqlite3 /data/app.db "VACUUM INTO '/tmp/app.sqlite'"
+gzip /tmp/app.sqlite
+restic -r s3://bucket/backup backup /tmp/app.sqlite.gz
+restic -r s3://bucket/backup forget -l 1 -H 6 -d 2 -w 2 -m 2 -y 2
+restic -r s3://bucket/backup prune
+```
+
+`VACUUM INTO` reads the whole database, so on large DBs it can exceed memory
+or time budgets under a busy writer — batch outside peak traffic.
+
+### Litestream (streaming replication)
+
+[Litestream](https://litestream.io/) continuously streams the WAL to S3-compatible
+storage, giving near-zero-RPO recovery without full-database snapshots.
+
+```yaml
+# litestream.yml
+dbs:
+  - path: /data/app.db
+    replicas:
+      - url: s3://bucket/app
+        retention: 400h
+```
+
+```bash
+litestream replicate -config litestream.yml
+# Restore:
+# litestream restore -o /data/app.db s3://bucket/app
+```
+
+Prefer Litestream over scheduled `VACUUM INTO` when the database changes often —
+incremental WAL shipping avoids the OOM risk of snapshotting a large DB.
+
+### Verify backups
+
+A backup that was never restored is a myth. Test restore on a throwaway instance
+and `PRAGMA integrity_check;` before trusting it.
 
 ---
 
@@ -449,6 +509,30 @@ class SQLitePool:
         finally:
             cursor.close()
 ```
+
+### Split Tables Across Multiple Files
+
+When tables don't need to join, put them in separate `.db` files. Each file
+gets its own writer lock, so independent workloads stop contending.
+
+```python
+import sqlite3
+
+users = sqlite3.connect("users.db")
+events = sqlite3.connect("events.db")
+# users.db and events.db have independent write locks,
+# independent WAL files, and independent backups.
+```
+
+ATTACH can still cross-query when needed:
+
+```sql
+ATTACH 'events.db' AS events;
+SELECT u.name, e.title FROM users u JOIN events.events e ON e.user_id = u.id;
+```
+
+Trade-off: no cross-database foreign keys, and transactions are not atomic
+across files. Only split when the tables are genuinely independent.
 
 ### Migration Helper
 
@@ -637,6 +721,7 @@ cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
 - **Corruption FAQ**: https://www.sqlite.org/lockingv3.html
 - **OpenCode Issue #21215**: concurrent sessions crash with SQLITE_BUSY
 - **OpenCode Issue #21790**: sessions lost due to failed migration
+- **jvns.ca – Learning about running SQLite**: https://jvns.ca/blog/2026/07/17/learning-about-running-sqlite/
 
 ---
 
@@ -675,6 +760,31 @@ def get_connection(db_path):
 
     return conn
 ```
+
+### Long-Running Writes and Batch Deletes
+
+WAL allows one writer at a time. A `DELETE FROM big_table WHERE ...` that runs
+longer than `busy_timeout` blocks every other writer and can crash workers when
+they hit the 5s default.
+
+```python
+# BAD: one big delete holds the write lock for seconds
+conn.execute("DELETE FROM completed_tasks WHERE created_at < ?", (cutoff,))
+
+# GOOD: delete in small batches so each transaction is sub-second
+while True:
+    cur = conn.execute(
+        "DELETE FROM completed_tasks WHERE rowid IN ("
+        "  SELECT rowid FROM completed_tasks WHERE created_at < ? LIMIT 1000"
+        ")",
+        (cutoff,),
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        break
+```
+
+For large maintenance, prefer scheduled maintenance windows over live batches.
 
 ### Isolation for Multiple Instances
 
