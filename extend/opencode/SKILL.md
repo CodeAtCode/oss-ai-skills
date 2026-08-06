@@ -1,9 +1,9 @@
 ---
 name: opencode
-description: "Develop plugins, tools, and extensions for OpenCode AI coding agent with MCP, LSP integration, custom tools, and SDK usage"
+description: "Develop plugins, tools, and extensions for OpenCode AI coding agent. Covers the real Plugin/Hooks API (v1.18+), tool factory, event system, configuration, build, testing, and the crash-prevention rules learned the hard way."
 metadata:
   author: mte90
-  version: "1.0.0"
+  version: "2.0.0"
   tags:
     - opencode
     - plugin
@@ -14,811 +14,313 @@ metadata:
 
 # OpenCode Plugin Development
 
-Complete guide for developing plugins, tools, and extensions for OpenCode AI coding agent.
+Complete, field-tested guide for developing plugins for OpenCode (v1.18+) AI coding agent.
 
-## Overview
+> **Every rule, signature, and pattern below was verified against a real plugin
+> (`opencode-auto-resume`) that went through 5 versions and 3 distinct crash
+> classes in production.** The "Hard-won rules" sections are non-negotiable —
+> violating them silently breaks the host.
 
-OpenCode is an AI-powered coding agent that supports extensibility through plugins, custom tools, MCP (Model Context Protocol) servers, and skills.
+---
 
-### Repository Structure
+## Extension Types — When to Use What
 
-```
-anomalyco/opencode/
-├── packages/
-│   ├── opencode/          # Main CLI and server
-│   │   └── src/
-│   │       ├── plugin/    # Plugin system
-│   │       ├── tool/      # Tool system
-│   │       ├── mcp/       # MCP integration
-│   │       ├── session/   # Session management
-│   │       └── provider/  # LLM providers
-│   ├── plugin/            # Plugin API package
-│   │   └── src/           # @opencode-ai/plugin
-│   ├── sdk/               # SDK packages
-│   │   └── js/            # @opencode-ai/sdk (TypeScript)
-│   └── util/              # Shared utilities
-```
+| Extension Type | Best For | Example |
+|----------------|----------|---------|
+| **Plugin (Hooks)** | Event-driven automation, custom tools, recovery logic | Auto-resume stalled sessions, enforce agent selection |
+| **Tools** | AI-triggered actions inside a plugin | `task_complete`, `commit`, custom search |
+| **MCP Servers** | External service integrations | Databases, GitHub, filesystem, remote APIs |
+| **Skills** | Knowledge/prompt templates (this file is one) | Framework patterns, project conventions |
+| **Commands** | Interactive slash shortcuts | `/hello`, `/deploy` |
+| **Providers** | Custom LLM backends | Alternative API gateways, self-hosted models |
 
-### Extension Types - When to Use What
+---
 
-| Extension Type | Best For | Example Use Case |
-|----------------|----------|------------------|
-| **Tools** | AI-triggered actions | Search files, read/write data, execute code |
-| **MCP Servers** | External service integrations | Connect to databases, GitHub, filesystem |
-| **Skills** | Knowledge/prompt templates | Coding patterns, best practices, frameworks |
-| **Commands** | Interactive shortcuts | `/hello`, `/search`, custom slash commands |
-| **Providers** | Custom LLM backends | Alternative API providers, custom models |
+## The Plugin Contract (v1.18+) — Read This First
 
-### Prerequisites
+A plugin is an **async function** `(input, options) => Promise<Hooks>`. It is NOT an object with `name`/`version`/`tools` fields — that shape is outdated and the host ignores it.
 
-Before developing OpenCode plugins, ensure you have:
-
-**Required Software:**
-- Node.js 18+ OR Bun 1.0+
-- TypeScript 5.0+ (recommended)
-
-**Development Environment:**
-- Basic TypeScript knowledge (interfaces, async/await, type inference)
-- Familiarity with package.json and npm/yarn/bun
-- Basic understanding of HTTP APIs
-
-### Plugin Package (@opencode-ai/plugin)
-### Hello World Plugin Example
-
-This is the simplest possible plugin to get started:
+### Type definition (from `@opencode-ai/plugin/dist/index.d.ts`)
 
 ```typescript
-// hello-world-plugin/index.ts
-import { Plugin, Tool } from '@opencode-ai/plugin'
+export type Plugin = (input: PluginInput, options?: PluginOptions) => Promise<Hooks>
 
-const helloWorldTool: Tool = {
-  name: 'greet_user',
-  description: 'Greet a user by name',
-  parameters: {
-    type: 'object',
-    properties: {
-      name: {
-        type: 'string',
-        description: 'Name to greet'
-      }
-    },
-    required: ['name']
-  },
-  execute: async (args, context) => {
-    return {
-      content: `Hello, ${args.name}! Welcome to OpenCode.`
-    }
-  }
+export interface Hooks {
+  dispose?: () => Promise<void>
+  event?: (input: { event: Event }) => Promise<void>
+  config?: (input: Config) => Promise<void>
+  tool?: { [key: string]: ToolDefinition }
+  auth?: AuthHook
+  provider?: ProviderHook
+  "chat.message"?: (input: ChatMessageInput) => Promise<void>
+  "tool.execute.before"?: (input: ToolExecInput) => Promise<void>
+  "tool.execute.after"?: (input: ToolExecInput) => Promise<void>
+  "command.execute.before"?: (input: CommandExecInput) => Promise<void>
+  "command.execute.after"?: (input: CommandExecInput) => Promise<void>
 }
-
-const plugin: Plugin = {
-  name: 'hello-world',
-  version: '1.0.0',
-  description: 'A simple greeting plugin',
-  tools: [helloWorldTool]
-}
-
-export default plugin
 ```
+
+### Correct minimal plugin
 
 ```typescript
-// packages/plugin/src/index.ts
-export interface Plugin {
-  name: string
-  version: string
-  description?: string
-  tools?: Tool[]
-  commands?: Command[]
-  providers?: Provider[]
-  skills?: Skill[]
-}
+import type { Plugin } from "@opencode-ai/plugin"
+import { tool } from "@opencode-ai/plugin"
 
-export interface Tool {
-  name: string
-  description: string
-  parameters: Schema
-  execute: (args: any, context: ToolContext) => Promise<ToolResult>
-}
-
-export interface ToolContext {
-  session: Session
-  provider: Provider
-  config: Config
-  fs: FileSystem
-}
-
-export interface ToolResult {
-  content: string | ContentBlock[]
-  isError?: boolean
-}
-```
-
-// my-plugin/index.ts
-import { Plugin, Tool } from '@opencode-ai/plugin'
-
-const myPlugin: Plugin = {
-  name: 'my-custom-plugin',
-  version: '1.0.0',
-  description: 'Custom tools for OpenCode',
-  
-  tools: [
-    {
-      name: 'my_tool',
-      description: 'Performs a custom action',
-      parameters: {
-        type: 'object',
-        properties: {
-          input: {
-            type: 'string',
-            description: 'Input to process'
-          }
-        },
-        required: ['input']
-### Error Handling
-
-```typescript
-const robustTool: Tool = {
-  name: 'safe_tool',
-  description: 'Tool with proper error handling',
-  parameters: { ... },
-  execute: async (args, context) => {
-    try {
-      // Validate args
-      if (!args.required) {
-        return {
-          content: 'Error: Required parameter missing',
-          isError: true
-        }
-      }
-      
-      // Execute with timeout
-      const result = await Promise.race([
-        doWork(args),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 30000)
-        )
-      ])
-      
-      return { content: result }
-    } catch (error) {
-      return {
-        content: `Error: ${error.message}`,
-        isError: true
-      }
-    }
-  }
-}
-```
-
-#### Troubleshooting
-
-**Common Issues and Solutions:**
-
-1. **Plugin Not Loading**
-   - Check file path is absolute with `file:///` prefix in config
-   - Verify plugin exports default correctly: `export default plugin`
-   - Ensure TypeScript compilation succeeded without errors
-   - Check OpenCode logs for import errors
-
-2. **Build Errors**
-   - Ensure you're using Bun/Node compatible TypeScript
-   - Check that `dist` directory exists and contains output
-   - Verify all dependencies are installed: `npm install`
-   - Common errors: missing type definitions, wrong module system
-
-3. **Configuration Issues**
-   - Plugin paths must be absolute: `file:///home/user/...`
-   - Required environment variables must be set
-   - MCP server connections require valid credentials
-   - Test config with minimal settings first
-
-4. **Permission Errors**
-   - File system access requires appropriate permissions
-   - Check if directory is writable
-   - Some operations may require elevated permissions
-   - Use sandbox directories for testing
-        const result = processInput(args.input)
-        return {
-          content: result
-        }
-      }
-    }
-  ]
-}
-
-export default myPlugin
-```
-
-## Tool System
-
-### Tool Definition
-
-```typescript
-// Tool interface
-interface Tool {
-  // Unique identifier
-  name: string
-  
-  // Description for the AI model
-  description: string
-  
-  // JSON Schema for parameters
-  parameters: JSONSchema
-  
-  // Handler function
-  execute: (args: Record<string, any>, context: ToolContext) => Promise<ToolResult>
-}
-
-// Parameter schema example
-const toolSchema = {
-  type: 'object',
-  properties: {
-    filePath: {
-      type: 'string',
-      description: 'Path to the file'
-    },
-    content: {
-      type: 'string',
-      description: 'Content to write'
-    },
-    encoding: {
-      type: 'string',
-      enum: ['utf-8', 'binary'],
-      default: 'utf-8'
-    }
-  },
-  required: ['filePath', 'content']
-}
-```
-
-### Tool Implementation
-
-```typescript
-import { Tool, ToolContext, ToolResult } from '@opencode-ai/plugin'
-
-const searchFilesTool: Tool = {
-  name: 'search_files',
-  description: 'Search for files matching a pattern',
-  
-  parameters: {
-    type: 'object',
-    properties: {
-      pattern: {
-        type: 'string',
-        description: 'Glob pattern to match files'
-      },
-      directory: {
-        type: 'string',
-        description: 'Directory to search in',
-        default: '.'
-      },
-      excludePatterns: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Patterns to exclude'
-      }
-    },
-    required: ['pattern']
-  },
-  
-  execute: async (args, context: ToolContext) => {
-    const { pattern, directory = '.', excludePatterns = [] } = args
-    
-    try {
-      // Access file system through context
-      const files = await context.fs.glob(pattern, {
-        cwd: directory,
-        ignore: excludePatterns
-      })
-      
-      return {
-        content: JSON.stringify(files, null, 2)
-      }
-    } catch (error) {
-      return {
-        content: `Error: ${error.message}`,
-        isError: true
-      }
-    }
-  }
-}
-```
-
-### Tool Result Types
-
-```typescript
-// String result
-const stringResult: ToolResult = {
-  content: 'Operation completed successfully'
-}
-
-// Error result
-const errorResult: ToolResult = {
-  content: 'Failed to process file',
-  isError: true
-}
-
-// Structured content
-const structuredResult: ToolResult = {
-  content: [
-    { type: 'text', text: 'File contents:' },
-    { type: 'code', language: 'typescript', code: 'const x = 1' }
-  ]
-}
-
-// Image result
-const imageResult: ToolResult = {
-  content: [
-    { type: 'image', url: 'file:///path/to/image.png' }
-  ]
-}
-
-
-#### Official Pattern (Recommended for Beginners)
-
-This is the standard plugin structure. Always start here:
-
-```typescript
-// my-plugin/index.ts
-import { Plugin, Tool } from '@opencode-ai/plugin'
-
-const myPlugin: Plugin = {
-  name: 'my-custom-plugin',
-  version: '1.0.0',
-  description: 'Custom tools for OpenCode',
-  
-  tools: [
-    {
-      name: 'my_tool',
-      description: 'Performs a custom action',
-      parameters: {
-        type: 'object',
-        properties: {
-          input: {
-            type: 'string',
-            description: 'Input to process'
-          }
-        },
-        required: ['input']
-      },
-      execute: async (args, context) => {
-        // Tool implementation
-        const result = processInput(args.input)
-        return {
-          content: result
-        }
-      }
-    }
-  ]
-}
-
-export default myPlugin
-```
-
-This pattern exports a plain object with `name`, `version`, `description`, and optionally `tools`, `commands`, `providers`, or `skills`.
-### Registering Tools
-
-```typescript
-// In plugin definition
-export default {
-  name: 'my-tools',
-  version: '1.0.0',
-  tools: [
-    searchFilesTool,
-    readFileTool,
-    writeFileTool
-  ]
-}
-
-// Or dynamically register
-import { registerTool } from '@opencode-ai/plugin'
-
-registerTool({
-  name: 'dynamic_tool',
-  description: 'Dynamically registered tool',
-  parameters: { type: 'object', properties: {} },
-  execute: async () => ({ content: 'Dynamic!' })
-})
-```
-
-## MCP Integration
-
-### What is MCP?
-
-Model Context Protocol (MCP) is a standard protocol for connecting AI models to external tools and data sources.
-
-### MCP Server Configuration
-
-```json
-// opencode.json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "mcp-filesystem",
-      "args": ["--root", "/home/user/projects"],
-      "env": {}
-    },
-    "github": {
-      "command": "mcp-github",
-      "args": [],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-      }
-    },
-    "database": {
-      "command": "mcp-postgres",
-      "args": ["postgresql://localhost/mydb"]
-    }
-  }
-}
-```
-
-### Creating MCP Server
-
-```typescript
-// Custom MCP server
-import { Server } from '@modelcontextprotocol/sdk/server'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
-
-const server = new Server({
-  name: 'my-mcp-server',
-  version: '1.0.0'
-}, {
-  capabilities: {
-    tools: {}
-  }
-})
-
-// Register tools
-server.setRequestHandler('tools/list', async () => {
+export const MyPlugin: Plugin = async (ctx, options) => {
   return {
-    tools: [
-      {
-        name: 'my_tool',
-        description: 'My custom tool',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string' }
-          },
-          required: ['query']
-        }
+    event: async ({ event }) => {
+      // handle events
+    },
+    config: async () => {
+      // one-time init
+    },
+    tool: {
+      my_tool: tool({
+        description: "Does something useful",
+        args: {},
+        execute: async (_args, ctx) => "ok",
+      }),
+    },
+  }
+}
+
+export default MyPlugin
+```
+
+> ⚠️ **`config` hook signature**: `(input: Config) => Promise<void>`. It receives a Config object — you may ignore it but the parameter exists.
+
+---
+
+## 🚨 Hard-Won Rules (violate these and the host crashes)
+
+These rules were discovered through real production crashes. Each one has a regression test in the reference plugin.
+
+### Rule 1 — Only export Plugin-shaped values from the entry module
+
+OpenCode's plugin loader iterates **every** module export via `Object.values(module)` and treats each as a Plugin entrypoint:
+
+```js
+// Inside opencode's plugin loader (deobfuscated):
+for (let N of Object.values(pluginModule)) {
+  if (typeof N !== "function") throw TypeError("Plugin export is not a function")
+  const hooks = await N(ctx, options)   // called as a Plugin!
+  pluginArray.push(hooks)
+}
+// later:
+for (let N of pluginArray) {
+  await N.config?.(config)   // crashes if N is null
+}
+```
+
+**If any export returns `null` → the host crashes with `null is not an object (evaluating 'N.config')`, surfaced in the TUI as `Unexpected server error. Check server logs for details.`**
+
+#### ✅ Correct
+
+```typescript
+// src/index.ts — ONLY Plugin exports
+export const MyPlugin: Plugin = async (ctx, options) => { ... }
+export default MyPlugin
+```
+
+#### 🚫 Wrong — crashes the host
+
+```typescript
+// src/index.ts
+export function getLastAssistantError(messages) { ... return null }  // called as Plugin, returns null, host crashes
+export function backoffMs(attempt) { return 42 }                       // called as Plugin, returns number, host crashes
+export const MyPlugin: Plugin = async (ctx, options) => { ... }
+export default MyPlugin
+```
+
+#### Solution — split utilities into a separate file
+
+```typescript
+// src/index.ts — bundle entry, only Plugin exports
+export const MyPlugin: Plugin = async (ctx, options) => { ... }
+export default MyPlugin
+
+// src/test-utils.ts — NOT the bundle entry; tests import from here
+export function getLastAssistantError(messages) { ... }
+export function backoffMs(attempt, base, max) { ... }
+```
+
+Tests import utilities from `./test-utils`; the bundled `dist/index.js` only exposes the Plugin. Verify with:
+
+```bash
+bun -e 'const m = await import("./dist/index.js"); console.log(Object.keys(m))'
+# MUST print only: [ "MyPlugin", "default" ]
+```
+
+### Rule 2 — Never let an async handler throw unhandled
+
+The `event` hook is called **fire-and-forget** by the host. If `handleEvent()` rejects, it becomes an unhandled promise rejection → bun process exits → OpenCode disappears from the TUI.
+
+#### ✅ Correct
+
+```typescript
+return {
+  event: async ({ event }) => {
+    handleEvent(event).catch((e) => {
+      console.error("[my-plugin] handleEvent error:", e)
+    })
+  },
+}
+```
+
+Same rule applies to `setInterval(async () => { ... })` bodies — wrap in a `safe()` boundary:
+
+```typescript
+async function safe<T>(fn: () => Promise<T>, label: string): Promise<T | undefined> {
+  try { return await fn() }
+  catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`[my-plugin] ${label}: ${msg}`)
+    return undefined
+  }
+}
+
+setInterval(() => {
+  safe(doPeriodicWork, "periodic timer").catch(() => {})
+}, 5000)
+```
+
+### Rule 3 — Validate event payloads defensively
+
+OpenCode event payloads are **not guaranteed** to match the documented shape. Real-world crashes found:
+
+- `todo.updated` events arrive with `properties.todos` as `{}` (object) or `undefined`, not an array
+- `session.status` `properties.status` is always `{ type: "idle" | "busy" | "retry" }` — never a bare string
+- Session IDs (`sessionID`) may be missing on some events
+
+#### ✅ Correct — `Array.isArray` before `.map()`/`.filter()`
+
+```typescript
+case "todo.updated": {
+  const rawTodos = (event.properties as any)?.todos
+  const todos: Array<Record<string, unknown>> = Array.isArray(rawTodos) ? rawTodos : []
+  w.todos = todos.map((t) => ({ ... }))   // safe
+  break
+}
+```
+
+### Rule 4 — `log()` must never rethrow
+
+If the OpenCode log API itself throws (network/server error), your `log()` helper's `catch` block must not propagate. Otherwise an error inside an error handler escapes:
+
+```typescript
+async function log(level: "info" | "warn" | "error", msg: string) {
+  try {
+    await ctx.client.app.log({ body: { service: "my-plugin", level, message: msg } })
+  } catch (e) {
+    console.error("[my-plugin] log() failed:", e instanceof Error ? e.message : e)
+    // do NOT rethrow
+  }
+}
+```
+
+### Rule 5 — Validate `sid` before every SDK call
+
+Session IDs from events may be empty, `undefined`, or malformed. The SDK throws `Expected 'id' to be a string` if you pass garbage:
+
+```typescript
+if (typeof sid !== "string" || !sid.startsWith("ses_")) return
+await ctx.client.session.prompt({ path: { id: sid }, body: { ... } })
+```
+
+---
+
+## The Context API (`ctx`)
+
+The `ctx` parameter is undocumented but stable across v1.18.x:
+
+```typescript
+// ctx.client — API calls
+await ctx.client.app.log({
+  body: { service: "my-plugin", level: "info", message: "..." }
+})
+
+const { data: sessions } = await ctx.client.session.list()
+const { data: statusMap } = await ctx.client.session.status()  // Record<sid, {type: "busy"|"idle"|"retry"}>
+const messages = await ctx.client.session.messages({ path: { id: sid } })
+await ctx.client.session.abort({ path: { id: sid } })
+await ctx.client.session.prompt({
+  path: { id: sid },
+  body: {
+    parts: [{ type: "text", text: "continue" }],
+    agent,   // optional: preserve selected agent
+    model,   // optional: { providerID, modelID }
+  },
+})
+
+// ctx.ui — toast notifications (TUI)
+await ctx.ui.toast({ title: "Done", message: "...", variant: "success" })
+```
+
+### `session.status()` return shape
+
+```typescript
+// status() returns { data: Record<sid, status> } where status is:
+type SessionStatus = { type: "idle" | "busy" | "retry" }
+// NEVER a bare string — always access via .type
+```
+
+### `session.list()` does NOT include status
+
+The `Session` type from `session.list()` has **no** `status` field. To check if a session is busy, call `session.status()` separately and build a `Record<sid, string>` map.
+
+---
+
+## Event System
+
+Plugins receive Server-Sent Events via the `event` hook. Real event types (v1.18+):
+
+```typescript
+return {
+  event: async ({ event }) => {
+    const type = event.type as string
+    const sid = event.sessionID as string | undefined
+    const props = event.properties as Record<string, unknown> | undefined
+
+    switch (type) {
+      case "session.created":
+      case "session.updated":
+      case "session.idle":          // legacy alias of session.status=idle
+      case "session.interrupted":   // user pressed ESC
+        break
+
+      case "session.status": {
+        const status = props?.status as { type: string } | undefined
+        // status.type in "idle" | "busy" | "retry" | "interrupted"
+        break
       }
-    ]
-  }
-})
 
-server.setRequestHandler('tools/call', async (request) => {
-  const { name, arguments: args } = request.params
-  
-  if (name === 'my_tool') {
-    const result = await processQuery(args.query)
-    return {
-      content: [{ type: 'text', text: result }]
+      case "session.error": {
+        const error = props?.error as { name: string; data?: { message: string } } | undefined
+        // error.name === "MessageAbortedError" → user pressed ESC
+        break
+      }
+
+      case "message.updated":
+      case "message.part.updated":
+        // props?.delta — streaming text delta
+        break
+
+      case "todo.updated": {
+        // ⚠️ props?.todos may be {} or undefined — validate with Array.isArray
+        break
+      }
+
+      case "tool.call":
+      case "tool.result":
+      case "command.executed":
+        break
     }
-  }
-  
-  throw new Error(`Unknown tool: ${name}`)
-})
-
-// Start server
-const transport = new StdioServerTransport()
-await server.connect(transport)
+  },
+}
 ```
 
-### MCP Tool Usage
-
-```typescript
-// Access MCP tools from OpenCode
-import { useMcpTools } from '@opencode-ai/plugin'
-
-const githubTools = await useMcpTools('github')
-
-// List available tools
-const tools = await githubTools.list()
-// [{ name: 'create_issue', description: '...', inputSchema: {...} }, ...]
-
-// Call a tool
-const result = await githubTools.call('create_issue', {
-  owner: 'myorg',
-  repo: 'myrepo',
-  title: 'New Issue',
-  body: 'Issue description'
-})
-```
-
-## Skills & Commands
-
-### Skill Files (SKILL.md)
-
-```markdown
----
-name: my-skill
-description: "Description of what this skill does"
-metadata:
-  author: "Author Name"
-  version: "1.0.0"
-  tags:
-    - tag1
-    - tag2
 ---
 
-# My Skill
-
-Instructions for the AI when this skill is loaded.
-
-## Instructions
-
-When asked to perform X:
-1. Step 1
-2. Step 2
-3. Step 3
-
-## Examples
-
-Example usage with code samples.
-```
-
-### Custom Commands
-
-```typescript
-// Define slash command
-interface Command {
-  name: string
-  description: string
-  handler: (args: string[], context: CommandContext) => Promise<void>
-}
-
-const myCommand: Command = {
-  name: '/mycommand',
-  description: 'Execute custom action',
-  handler: async (args, context) => {
-    // Command implementation
-    await context.session.sendMessage('Command executed!')
-  }
-}
-
-// Register in plugin
-export default {
-  name: 'my-commands',
-  version: '1.0.0',
-  commands: [myCommand]
-}
-```
-
-### Built-in Commands
-
-```
-/help          - Show available commands
-/clear         - Clear conversation
-/reset         - Reset session
-/model         - Switch model
-/skill         - Load a skill
-/config        - View/edit configuration
-```
-
-## SDK Usage
-
-### @opencode-ai/sdk
-
-```typescript
-import { OpenCodeClient } from '@opencode-ai/sdk'
-
-// Create client
-const client = new OpenCodeClient({
-  baseUrl: 'http://localhost:3000',
-  apiKey: 'your-api-key'
-})
-
-// Send message
-const response = await client.chat({
-  message: 'Explain this code',
-  files: ['./src/index.ts']
-})
-
-// Stream response
-for await (const chunk of client.chatStream({
-  message: 'Write a function'
-})) {
-  process.stdout.write(chunk.content)
-}
-
-// Execute tool
-const result = await client.executeTool({
-  name: 'read_file',
-  args: { path: './src/main.ts' }
-})
-
-// Create session
-const session = await client.createSession({
-  model: 'claude-3-opus',
-  systemPrompt: 'You are a helpful coding assistant'
-})
-
-// Continue conversation
-const reply = await session.sendMessage('Add error handling')
-```
-
-### SDK Client Options
-
-```typescript
-interface ClientOptions {
-  // API endpoint
-  baseUrl?: string
-  
-  // Authentication
-  apiKey?: string
-  
-  // Model configuration
-  model?: string
-  
-  // Timeout in milliseconds
-  timeout?: number
-  
-  // Retry configuration
-  retries?: number
-  
-  // Custom headers
-  headers?: Record<string, string>
-}
-```
-
-## HTTP Server & REST API
-
-### Server Configuration
-
-```typescript
-// Server setup
-import { createServer } from '@opencode-ai/server'
-
-const server = createServer({
-  port: 3000,
-  host: '0.0.0.0',
-  
-  // Authentication
-  auth: {
-    type: 'api-key',
-    keys: ['secret-key-1', 'secret-key-2']
-  },
-  
-  // CORS
-  cors: {
-    origins: ['http://localhost:5173'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  },
-  
-  // Rate limiting
-  rateLimit: {
-    windowMs: 60000,
-    max: 100
-  }
-})
-
-await server.start()
-```
-
-### REST API Endpoints
-
-```typescript
-// Chat endpoint
-POST /api/chat
-{
-  "message": "string",
-  "session_id": "string?",
-  "files": ["string"]?,
-  "model": "string?"
-}
-
-// Response
-{
-  "content": "string",
-  "session_id": "string",
-  "tool_calls": [...]
-}
-
-// Streaming
-POST /api/chat/stream
-// Returns SSE stream
-
-// Tool execution
-POST /api/tools/execute
-{
-  "name": "string",
-  "args": { ... }
-}
-
-// Session management
-GET  /api/sessions
-POST /api/sessions
-GET  /api/sessions/:id
-DELETE /api/sessions/:id
-
-// Models
-GET /api/models
-
-// Configuration
-GET /api/config
-PUT /api/config
-```
-
-### API Client Example
-
-```typescript
-// Using fetch
-const response = await fetch('http://localhost:3000/api/chat', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer your-api-key'
-  },
-  body: JSON.stringify({
-    message: 'Hello, OpenCode!',
-    model: 'claude-3-opus'
-  })
-})
-
-const data = await response.json()
-console.log(data.content)
-```
-
-## Event Bus
-
-### Publishing Events
-
-```typescript
-import { Bus } from '@opencode-ai/plugin'
-
-// Publish event
-Bus.publish('session:created', {
-  sessionId: 'abc123',
-  model: 'claude-3-opus'
-})
-
-Bus.publish('tool:executed', {
-  toolName: 'read_file',
-  args: { path: './src/main.ts' },
-  result: '...'
-})
-```
-
-### Subscribing to Events
-
-```typescript
-// Subscribe to events
-const unsubscribe = Bus.subscribe('session:created', (event) => {
-  console.log('New session:', event.sessionId)
-})
-
-// Subscribe to all events
-Bus.subscribe('*', (event) => {
-  console.log('Event:', event.type, event.data)
-})
-
-// Unsubscribe
-unsubscribe()
-```
-
-### Built-in Events
-
-```typescript
-// Session events
-'session:created'   // New session created
-'session:deleted'   // Session deleted
-'session:message'   // Message sent/received
-
-// Tool events
-'tool:started'      // Tool execution started
-'tool:completed'    // Tool completed successfully
-'tool:failed'       // Tool execution failed
-
-// File events
-'file:read'         // File read
-'file:written'      // File written
-'file:deleted'      // File deleted
-
-// Model events
-'model:switched'    // Model changed
-'model:response'    // Model response received
 ## Subagent Lifecycle Management
 
 Managing subagents spawned from plugins requires careful attention to timeouts, abort handling, and cleanup to prevent runaway processes.
@@ -931,275 +433,661 @@ async function spawnWithCleanup(ctx: any, config: SubagentConfig) {
 | Abort throws | Session already ended | Wrap abort in try/catch |
 | Parent waits forever | No abort on parent exit | Register cleanup handler on parent end |
 
-## Event Handler Patterns
+---
 
-Event handlers are critical for plugins that need to react to AI behavior, especially for auto-resume and tool-call interception.
+## Tool System
 
-### Handler Registration
-
-Use `handleEvent` pattern for subscribing to specific event types:
+Use the `tool()` factory from `@opencode-ai/plugin`. Do NOT hand-roll a `Tool` object.
 
 ```typescript
-export const handleEvent: Plugin.EventHandler = async (ctx, event) => {
-  // Only handle events we care about
-  if (event.type !== "message.part") return
-  
-  // Process the event
-  const part = event.properties.part
-  // ...
-}
-```
+import { tool } from "@opencode-ai/plugin"
+import { z } from "zod"  // or omit args for no-arg tools
 
-### checkForToolCallAsText
-
-Detecting tool calls embedded in assistant text output. This pattern is used by auto-resume plugins to intercept when the AI tries to call a tool by writing it as text instead of using the tool API:
-
-```typescript
-function checkForToolCallAsText(text: string): ToolCall | null {
-  // Pattern: AI writes tool call as text instead of using tool API
-  // Look for patterns like JSON tool calls or function call syntax
-  
-  const toolCallPattern = /```(?:json)?\s*(\{[^}]*"tool"[^}]*\})\s*```/
-  const match = text.match(toolCallPattern)
-  if (!match) return null
-  
-  try {
-    const parsed = JSON.parse(match[1])
-    if (parsed.tool && parsed.parameters) {
-      return {
-        name: parsed.tool,
-        parameters: parsed.parameters,
-      }
-    }
-  } catch (e) {
-    return null
-  }
-  return null
-}
-
-export const handleEvent: Plugin.EventHandler = async (ctx, event) => {
-  if (event.type !== "message.part") return
-  
-  const part = event.properties.part
-  if (part.type !== "text") return
-  
-  const toolCall = checkForToolCallAsText(part.text)
-  if (toolCall) {
-    // Intercept and execute the tool call properly
-    ctx.logger.info(`Detected tool call in text: ${toolCall.name}`)
-    await ctx.client.tool.execute({
-      name: toolCall.name,
-      parameters: toolCall.parameters,
-    })
-  }
-}
-```
-
-### Event Dispatch Flow
-
-Events flow from source → bus → handlers:
-1. Event is published to the bus
-2. All registered handlers are called in priority order
-3. Handlers should not throw (breaks dispatch chain)
-4. Use `event.properties.source` to filter own events
-
-### Error Handling in Handlers
-
-Wrap handler body in try/catch - never throw:
-
-```typescript
-export const handleEvent: Plugin.EventHandler = async (ctx, event) => {
-  try {
-    // Handler logic
-    if (event.type !== "message.part") return
-    const part = event.properties.part
-    // ... process event
-  } catch (error) {
-    ctx.logger.error(`Handler failed: ${error}`)
-    // Don't rethrow — it breaks the event dispatch chain
-  }
-}
-```
-
-### Testing Event Handlers
-
-Test handlers with mock events:
-
-```typescript
-import { describe, it, expect, vi } from 'vitest'
-
-describe('checkForToolCallAsText', () => {
-  it('detects JSON tool call in code block', () => {
-    const text = 'Here is the tool call:\n```json\n{"tool":"read_file","parameters":{"path":"test.ts"}}\n```'
-    const result = checkForToolCallAsText(text)
-    expect(result).not.toBeNull()
-    expect(result!.name).toBe('read_file')
-  })
-  
-  it('returns null for plain text', () => {
-    expect(checkForToolCallAsText('just some text')).toBeNull()
-  })
-})
-
-describe('handleEvent', () => {
-  it('processes message.part events', async () => {
-    const mockCtx = { client: { tool: { execute: vi.fn() } }, logger: { info: vi.fn() } }
-    const event = {
-      type: 'message.part',
-      properties: { part: { type: 'text', text: '```json\n{"tool":"read","parameters":{}}\n```' } }
-    }
-    await handleEvent(mockCtx as any, event as any)
-    expect(mockCtx.client.tool.execute).toHaveBeenCalled()
-  })
+const myTool = tool({
+  description: "Search the codebase for a pattern",
+  args: z.object({
+    query: z.string().describe("Search query"),
+    maxResults: z.number().optional().default(10),
+  }),
+  execute: async (args, ctx) => {
+    // args is typed from the schema
+    // ctx.sessionID — the session that called the tool
+    return `Found ${args.maxResults} results for "${args.query}"`
+  },
 })
 ```
 
-### Common Pitfalls
+For no-arg tools:
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Handler not called | Wrong event type check | Verify event.type matches exactly |
-| Event dispatch breaks | Handler throws | Wrap handler body in try/catch |
-| Duplicate tool execution | Handler + tool API both fire | Use checkForToolCallAsText to intercept only text-based calls |
-| Handler runs on own events | No source filter | Check event.properties.source !== "self" |
+```typescript
+const taskCompleteTool = tool({
+  description: "Signal that all work is complete",
+  args: {},
+  execute: async (_args, ctx) => "Task completion acknowledged",
+})
+```
 
-## Configuration
+Register tools in the `tool` hook:
 
-### Configuration File
+```typescript
+return {
+  tool: {
+    task_complete: taskCompleteTool,
+    my_search: myTool,
+  },
+}
+```
+
+---
+
+## MCP Integration
+
+### What is MCP?
+
+Model Context Protocol (MCP) is a standard protocol for connecting AI models to external tools and data sources.
+
+### MCP Server Configuration
 
 ```json
 // opencode.json
 {
-  "model": "claude-3-opus",
-  "temperature": 0.7,
-  "maxTokens": 4096,
-  
-  "providers": {
-    "anthropic": {
-      "apiKey": "${ANTHROPIC_API_KEY}"
-    },
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}"
-    }
-  },
-  
   "mcpServers": {
     "filesystem": {
       "command": "mcp-filesystem",
-      "args": ["--root", "."]
+      "args": ["--root", "/home/user/projects"],
+      "env": {}
+    },
+    "github": {
+      "command": "mcp-github",
+      "args": [],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "database": {
+      "command": "mcp-postgres",
+      "args": ["postgresql://localhost/mydb"]
     }
-  },
-  
-  "tools": {
-    "enabled": ["read", "write", "search", "execute"],
-    "disabled": ["dangerous_tool"]
-  },
-  
-  "plugins": [
-    "./plugins/my-plugin",
-    "@opencode-ai/plugin-example"
-  ]
+  }
 }
 ```
 
-### Environment Variables
+### Creating MCP Server
+
+```typescript
+// Custom MCP server
+import { Server } from '@modelcontextprotocol/sdk/server'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'
+
+const server = new Server({
+  name: 'my-mcp-server',
+  version: '1.0.0'
+}, {
+  capabilities: {
+    tools: {}
+  }
+})
+
+// Register tools
+server.setRequestHandler('tools/list', async () => {
+  return {
+    tools: [
+      {
+        name: 'my_tool',
+        description: 'My custom tool',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' }
+          },
+          required: ['query']
+        }
+      }
+    ]
+  }
+})
+
+server.setRequestHandler('tools/call', async (request) => {
+  const { name, arguments: args } = request.params
+  
+  if (name === 'my_tool') {
+    const result = await processQuery(args.query)
+    return {
+      content: [{ type: 'text', text: result }]
+    }
+  }
+  
+  throw new Error(`Unknown tool: ${name}`)
+})
+
+// Start server
+const transport = new StdioServerTransport()
+await server.connect(transport)
+```
+
+### MCP Tool Usage
+
+```typescript
+// Access MCP tools from OpenCode
+import { useMcpTools } from '@opencode-ai/plugin'
+
+const githubTools = await useMcpTools('github')
+
+// List available tools
+const tools = await githubTools.list()
+// [{ name: 'create_issue', description: '...', inputSchema: {...} }, ...]
+
+// Call a tool
+const result = await githubTools.call('create_issue', {
+  owner: 'myorg',
+  repo: 'myrepo',
+  title: 'New Issue',
+  body: 'Issue description'
+})
+```
+
+---
+
+## Configuration
+
+### Install a plugin
+
+In `~/.config/opencode/opencode.json`:
+
+```jsonc
+{
+  "plugin": [
+    "my-plugin@1.0.0",                    // from npm
+    "file:///abs/path/to/dist/index.js",  // local development
+    ["file:///abs/path/to/dist/index.js", { "enabled": true, "debug": true }]  // with options
+  ],
+  "autoupdate": true
+}
+```
+
+Options are passed as the second argument to the Plugin function. With `autoupdate: true`, the highest semver version in the npm registry wins.
+
+### Plugin options pattern
+
+```typescript
+export const MyPlugin: Plugin = async (ctx, options = {}) => {
+  const enabled = options.enabled !== false   // default true
+  const timeout = options.timeoutMs ?? 30_000
+
+  if (!enabled) {
+    return { event: async () => {}, config: async () => {} }
+  }
+  // ...
+}
+```
+
+### Two install locations — know the difference
+
+OpenCode resolves plugins from **two** places. Updates must touch both or you get stale loads:
+
+| Location | Purpose |
+|----------|---------|
+| `~/.cache/opencode/packages/<name>@<ver>/` | Download cache. Contains `node_modules/`, `dist/`, `package-lock.json`. |
+| `~/.config/opencode/node_modules/<name>/` | Runtime resolution via `bun.lock` + `package.json` in `~/.config/opencode/`. |
+
+The `~/.config/opencode/package.json` caret-pins versions (e.g. `"opencode-auto-resume": "^1.0.15"`), and `bun.lock` locks resolution. To force a specific version: edit `package.json`, delete `bun.lock`, run `bun install` in `~/.config/opencode/`.
+
+To clear all cached versions and force a fresh download:
 
 ```bash
-# API Keys
-ANTHROPIC_API_KEY=sk-ant-xxx
-OPENAI_API_KEY=sk-xxx
-
-# Configuration
-OPENCODE_CONFIG_PATH=/path/to/opencode.json
-OPENCODE_DATA_DIR=/path/to/data
-
-# Server
-OPENCODE_PORT=3000
-OPENCODE_HOST=0.0.0.0
-
-# Logging
-OPENCODE_LOG_LEVEL=info
+rm -rf ~/.cache/opencode/packages/opencode-auto-resume@*
+rm -rf ~/.local/share/reflex/bun/install/cache/opencode-auto-resume@*
+cd ~/.config/opencode && bun install
 ```
 
-## Testing Plugins
+---
 
-### Unit Tests
+## SDK Usage
 
-```typescript
-// tests/tool.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { myTool } from '../src/tools'
-
-describe('myTool', () => {
-  it('should process input correctly', async () => {
-    const mockContext = {
-      session: {},
-      fs: {
-        readFile: vi.fn().mockResolvedValue('content')
-      }
-    }
-    
-    const result = await myTool.execute(
-      { input: 'test' },
-      mockContext as any
-    )
-    
-    expect(result.content).toContain('processed')
-    expect(result.isError).toBeFalsy()
-  })
-  
-  it('should handle errors', async () => {
-    const mockContext = {
-      fs: {
-        readFile: vi.fn().mockRejectedValue(new Error('File not found'))
-      }
-    }
-    
-    const result = await myTool.execute(
-      { input: 'nonexistent' },
-      mockContext as any
-    )
-    
-    expect(result.isError).toBe(true)
-  })
-})
-```
-
-### Integration Tests
+### @opencode-ai/sdk
 
 ```typescript
-// tests/integration.test.ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { OpenCodeClient } from '@opencode-ai/sdk'
+
+// Create client
+const client = new OpenCodeClient({
+  baseUrl: 'http://localhost:3000',
+  apiKey: 'your-api-key'
+})
+
+// Send message
+const response = await client.chat({
+  message: 'Explain this code',
+  files: ['./src/index.ts']
+})
+
+// Stream response
+for await (const chunk of client.chatStream({
+  message: 'Write a function'
+})) {
+  process.stdout.write(chunk.content)
+}
+
+// Execute tool
+const result = await client.executeTool({
+  name: 'read_file',
+  args: { path: './src/main.ts' }
+})
+
+// Create session
+const session = await client.createSession({
+  model: 'claude-3-opus',
+  systemPrompt: 'You are a helpful coding assistant'
+})
+
+// Continue conversation
+const reply = await session.sendMessage('Add error handling')
+```
+
+### SDK Client Options
+
+```typescript
+interface ClientOptions {
+  // API endpoint
+  baseUrl?: string
+  
+  // Authentication
+  apiKey?: string
+  
+  // Model configuration
+  model?: string
+  
+  // Timeout in milliseconds
+  timeout?: number
+  
+  // Retry configuration
+  retries?: number
+  
+  // Custom headers
+  headers?: Record<string, string>
+}
+```
+
+---
+
+## HTTP Server & REST API
+
+### Server Configuration
+
+```typescript
+// Server setup
 import { createServer } from '@opencode-ai/server'
 
-describe('Plugin Integration', () => {
-  let server
-  let client
+const server = createServer({
+  port: 3000,
+  host: '0.0.0.0',
   
-  beforeAll(async () => {
-    server = await createServer({ port: 3001 })
-    await server.start()
-    
-    client = new OpenCodeClient({
-      baseUrl: 'http://localhost:3001'
-    })
+  // Authentication
+  auth: {
+    type: 'api-key',
+    keys: ['secret-key-1', 'secret-key-2']
+  },
+  
+  // CORS
+  cors: {
+    origins: ['http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
+  },
+  
+  // Rate limiting
+  rateLimit: {
+    windowMs: 60000,
+    max: 100
+  }
+})
+
+await server.start()
+```
+
+### REST API Endpoints
+
+```typescript
+// Chat endpoint
+POST /api/chat
+{
+  "message": "string",
+  "session_id": "string?",
+  "files": ["string"]?,
+  "model": "string?"
+}
+
+// Response
+{
+  "content": "string",
+  "session_id": "string",
+  "tool_calls": [...]
+}
+
+// Streaming
+POST /api/chat/stream
+// Returns SSE stream
+
+// Tool execution
+POST /api/tools/execute
+{
+  "name": "string",
+  "args": { ... }
+}
+
+// Session management
+GET  /api/sessions
+POST /api/sessions
+GET  /api/sessions/:id
+DELETE /api/sessions/:id
+
+// Models
+GET /api/models
+
+// Configuration
+GET /api/config
+PUT /api/config
+```
+
+### API Client Example
+
+```typescript
+// Using fetch
+const response = await fetch('http://localhost:3000/api/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer your-api-key'
+  },
+  body: JSON.stringify({
+    message: 'Hello, OpenCode!',
+    model: 'claude-3-opus'
   })
-  
-  afterAll(async () => {
-    await server.stop()
+})
+
+const data = await response.json()
+console.log(data.content)
+```
+
+---
+
+## Build Configuration
+
+```json
+{
+  "name": "my-opencode-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "dev": "bun build src/index.ts --outdir dist --target bun --watch",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "files": ["dist/index.js", "README.md", "LICENSE"],
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  },
+  "devDependencies": {
+    "@opencode-ai/sdk": "latest",
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}
+```
+
+> `--target bun` is required — OpenCode runs on bun. The output is a single bundled `dist/index.js` (a virtual filesystem `/$bunfs/root/...`).
+
+---
+
+## Testing
+
+### Unit tests for pure functions
+
+Keep utility functions in `src/test-utils.ts` so they can be tested without importing the plugin entry (which would require mocking `ctx`):
+
+```typescript
+// src/index.backoff.test.ts
+import { backoffMs } from "./test-utils"
+import { describe, test, expect } from "bun:test"
+
+describe("backoffMs()", () => {
+  test("attempt 1 returns base", () => {
+    expect(backoffMs(1, 1000, 8000)).toBe(1000)
   })
-  
-  it('should execute custom tool', async () => {
-    const result = await client.executeTool({
-      name: 'my_custom_tool',
-      args: { query: 'test' }
-    })
-    
-    expect(result).toBeDefined()
+  test("caps at max", () => {
+    expect(backoffMs(10, 1000, 8000)).toBe(8000)
   })
 })
 ```
+
+### Integration tests with mock ctx
+
+```typescript
+import { mock } from "bun:test"
+import { MyPlugin } from "./index"
+
+function createMockContext(opts: { sessions?: any[], messages?: Record<string, any[]> }) {
+  const promptCalls: any[] = []
+  const ctx = {
+    client: {
+      app: { log: mock(async () => {}) },
+      session: {
+        list: mock(async () => ({ data: opts.sessions ?? [] })),
+        status: mock(async () => ({ data: {} })),
+        messages: mock(async (cfg: any) => opts.messages?.[cfg.path.id] ?? []),
+        prompt: mock(async (cfg: any) => { promptCalls.push(cfg); return {} }),
+        abort: mock(async () => ({})),
+      },
+    },
+    ui: { toast: mock(async () => {}) },
+  } as any
+  return { ctx, promptCalls }
+}
+
+test("plugin preserves agent on resume", async () => {
+  const { ctx, promptCalls } = createMockContext({
+    messages: { s1: [{ role: "user", agent: "prometheus", parts: [] }] },
+  })
+  const hooks = await MyPlugin(ctx, {})
+
+  await hooks.event({ event: { type: "session.status", sessionID: "s1", properties: { status: { type: "idle" } } } })
+
+  expect(promptCalls[0]?.agent).toBe("prometheus")
+})
+```
+
+### Regression tests for crash-prevention rules
+
+Test the **contract**, not just behavior — bun's test runner does not fatal on unhandled rejections, so behavioral tests alone miss crash bugs. Read the source file and assert structural rules:
+
+```typescript
+import { readFileSync } from "node:fs"
+const SOURCE = readFileSync(join(import.meta.dir, "index.ts"), "utf8")
+
+test("REGRESSION: no non-Plugin exports", () => {
+  expect(SOURCE).not.toMatch(/^export\s+function\s+getLastAssistantError/m)
+  expect(SOURCE).not.toMatch(/^export\s+function\s+backoffMs/m)
+})
+
+test("REGRESSION: event hook wraps handleEvent in .catch()", () => {
+  expect(SOURCE).toMatch(/handleEvent\(event[^)]*\)\.catch\(/)
+})
+
+test("REGRESSION: todo.updated validates Array.isArray", () => {
+  expect(SOURCE).toMatch(/Array\.isArray\(rawTodos\)/)
+})
+
+test("REGRESSION: bundled dist only exports Plugin-shaped values", async () => {
+  const mod = await import("./index")
+  for (const [name, fn] of Object.entries(mod)) {
+    if (typeof fn !== "function") throw new Error(`${name} is not a function`)
+    const result = await (fn as Function)(fakeCtx, {})
+    if (result === null || typeof result !== "object") {
+      throw new Error(`${name} returned ${result} — would crash the host`)
+    }
+  }
+})
+```
+
+---
+
+## SDK Types (from `@opencode-ai/sdk`)
+
+### Message types
+
+```typescript
+interface UserMessage {
+  id: string
+  sessionID: string
+  role: "user"
+  time: { created: number }
+  agent: string        // the selected agent; critical for resume
+  model: { providerID: string; modelID: string }
+  tools?: { [key: string]: boolean }
+}
+
+interface AssistantMessage {
+  id: string
+  sessionID: string
+  role: "assistant"
+  time: { created: number; completed?: number }
+  error?: any          // present if the message failed
+  parentID: string
+  modelID: string
+  providerID: string
+  finish?: string      // "stop" | "length" | "error" | "unknown"
+}
+
+interface Message {
+  role: string
+  info?: { role?: string; error?: any }  // some messages nest role/error in .info
+  parts?: Part[]
+  error?: { name: string; data?: { message: string }; message?: string }
+}
+```
+
+### Part types
+
+```typescript
+type Part =
+  | { type: "text"; text: string; synthetic?: boolean }
+  | { type: "tool"; callID: string; tool: string; state: ToolState }
+  | { type: "reasoning"; text: string }
+  | { type: "file"; mime: string; url: string }
+  | { type: "agent"; name: string }
+  | { type: "step-start" }
+  | { type: "step-finish"; reason: string; cost: number; tokens: any }
+  | { type: "retry"; attempt: number; error: any }
+  | { type: "compaction"; auto: boolean }
+```
+
+### Extracting the selected agent
+
+The agent is on `UserMessage.agent`, **not** on `AssistantMessage`. To preserve the agent across resume:
+
+```typescript
+async function getSessionAgent(sid: string): Promise<string | undefined> {
+  const messages = await getSessionMessages(sid)
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const role = messages[i].role ?? messages[i].info?.role
+    if (role === "user") {
+      const agent = (messages[i] as any).agent
+      if (typeof agent === "string" && agent.length > 0) return agent
+    }
+  }
+  return undefined
+}
+```
+
+---
+
+## Real-World Patterns
+
+### Detecting streaming failures
+
+Providers fail mid-stream with errors like `APIError`, `ProviderError`, `StreamError`. Classify by error **name** (exact match) and **message** (regex):
+
+```typescript
+function isStreamingFailure(errorName: string, errorMessage: string): boolean {
+  const NAMES = ["ProviderError", "APIError", "StreamError", "ConnectionError", "TimeoutError"]
+  const PATTERNS = ["streaming response failed", "stream.*fail", "connection.*reset"]
+  if (NAMES.includes(errorName)) return true
+  const lower = errorMessage.toLowerCase()
+  return PATTERNS.some(p => { try { return new RegExp(p, "i").test(lower) } catch { return lower.includes(p) } })
+}
+```
+
+### Active-tool safety guard
+
+Never abort a session that has a tool running. Check both the in-flight counter (from hooks) and the SDK status:
+
+```typescript
+async function checkSessionHasActiveTool(sid: string): Promise<boolean> {
+  const statusMap = await getSessionStatusMap()
+  if (statusMap[sid] === "busy") return true
+  const messages = await getSessionMessages(sid)
+  const lastMsg = messages[messages.length - 1]
+  if (!lastMsg || roleOf(lastMsg) !== "assistant") return false
+  const parts = lastMsg.parts as any[] | undefined
+  return parts?.some(p => p.type === "tool-call" || p.type === "tool_use") ?? false
+}
+```
+
+### Hallucination loop detection
+
+Track `continue` timestamps per session. If 3+ continues within 10 minutes, abort and restart:
+
+```typescript
+function isHallucinationLoop(sid: string): boolean {
+  const w = sessions.get(sid)
+  if (!w) return false
+  const now = Date.now()
+  w.continueTimestamps.push(now)
+  const cutoff = now - 600_000  // 10 min
+  w.continueTimestamps = w.continueTimestamps.filter(t => t >= cutoff)
+  return w.continueTimestamps.length >= 3
+}
+```
+
+---
+
+## Debugging
+
+### "Unexpected server error. Check server logs for details."
+
+This is the generic TUI mask. The real error is in the log:
+
+```bash
+grep "level=ERROR" ~/.local/share/opencode/log/opencode.log | tail -20
+```
+
+Common causes (in order of likelihood):
+
+1. **Non-Plugin export returns null** → `null is not an object (evaluating 'N.config')` — see Rule 1
+2. **Unhandled promise rejection** in `event` hook or `setInterval` — see Rule 2
+3. **Event payload not validated** → `todos.filter is not a function` — see Rule 3
+4. **Invalid session ID** passed to SDK → `Expected 'id' to be a string` — see Rule 5
+
+### Plugin not loading
+
+```bash
+grep "failed to load plugin" ~/.local/share/opencode/log/opencode.log
+```
+
+Check:
+- `dist/index.js` exists and has `"main": "dist/index.js"` in `package.json`
+- The cache directory has the real package, not just a wrapper: `ls ~/.cache/opencode/packages/<name>@<ver>/node_modules/<name>/dist/index.js`
+- `bun.lock` in `~/.config/opencode/` resolves to the version you expect
+
+### Verify which version loaded at runtime
+
+```bash
+grep "opencode-auto-resume\|my-plugin" ~/.local/share/opencode/log/opencode.log | tail -5
+# Look for: path=my-plugin@X.Y.Z
+```
+
+---
 
 ## Publishing & Distribution
 
@@ -1261,485 +1149,19 @@ npm link
 }
 ```
 
-## Best Practices
-
-### 1. Tool Design
-
-```typescript
-// Good: Clear description and parameters
-const goodTool: Tool = {
-  name: 'search_code',
-  description: 'Search for code patterns across the project using regex or literal matching',
-  parameters: {
-    type: 'object',
-    properties: {
-      pattern: {
-        type: 'string',
-        description: 'Search pattern (regex supported)'
-      },
-      filePattern: {
-        type: 'string',
-        description: 'Glob pattern to filter files (e.g., "*.ts")',
-        default: '**/*'
-      }
-    },
-    required: ['pattern']
-  },
-  execute: async (args, context) => {
-    // Implementation
-  }
-}
-
-// Bad: Vague description
-const badTool: Tool = {
-  name: 'search',
-  description: 'Search',
-  parameters: { type: 'object' },
-  execute: async () => ({ content: '...' })
-}
-```
-
-### 2. Error Handling
-
-```typescript
-const robustTool: Tool = {
-  name: 'safe_tool',
-  description: 'Tool with proper error handling',
-  parameters: { ... },
-  execute: async (args, context) => {
-    try {
-      // Validate args
-      if (!args.required) {
-        return {
-          content: 'Error: Required parameter missing',
-          isError: true
-        }
-      }
-      
-      // Execute with timeout
-      const result = await Promise.race([
-        doWork(args),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 30000)
-        )
-      ])
-      
-      return { content: result }
-    } catch (error) {
-      return {
-        content: `Error: ${error.message}`,
-        isError: true
-      }
-    }
-  }
-}
-```
-
-### 3. Security
-
-```typescript
-// Validate file paths
-const safeReadTool: Tool = {
-  name: 'safe_read',
-  execute: async (args, context) => {
-    const path = resolvePath(args.path)
-    
-    // Check if path is within project
-    if (!isWithinProject(path, context.config.projectRoot)) {
-      return {
-        content: 'Error: Access denied - path outside project',
-        isError: true
-      }
-    }
-    
-    // Read file
-    const content = await context.fs.readFile(path)
-    return { content }
-  }
-}
-```
-
-## References
-
-- **OpenCode Repository**: https://github.com/anomalyco/opencode
-- **MCP Documentation**: https://modelcontextprotocol.io/
-- **TypeScript SDK**: packages/sdk/js
-- **Plugin API**: packages/plugin
-
 ---
 
-## Advanced Plugin Development (Practical Guide)
+## Summary Checklist
 
-This section covers undocumented behaviors discovered through real plugin development.
+Before publishing a plugin:
 
-### Pattern Comparison: Official vs Advanced
-
-**Official Pattern** (above) - for stability, documentation, and beginners
-
-**Advanced Pattern** (below) - for real-world production use, auto-resume, event handling
-
-Choose based on your needs:
-- **Official pattern**: Stable, documented, easier to maintain, better for learning
-- **Advanced pattern**: More powerful, real-world patterns, auto-resume, event handling
-### Plugin Export Pattern (NOT in official docs)
-
-The official docs show an object export, but **the real pattern is an async function** that returns hooks:
-
-```typescript
-// ACTUAL WORKING PATTERN - not object export
-export const AutoResumePlugin = async (ctx: any, options: PluginOptions) => {
-    // ctx provides access to OpenCode internals
-    return {
-        event: async ({ event }: { event: Record<string, unknown> }) => {
-            // Handle SSE events
-        },
-        config: async () => {
-            // Called when plugin loads
-        }
-    }
-}
-
-export default AutoResumePlugin
-```
-
-### Context API (ctx) - Undocumented
-
-```typescript
-// ctx.client - API calls
-ctx.client.app.log({ 
-    body: { 
-        service: string,       // Your plugin name
-        level: string,        // "debug" | "info" | "warn" | "error"
-        message: string 
-    } 
-})
-
-ctx.client.session.list()           // Get all sessions
-ctx.client.session.messages({ id: string })  // Get session messages
-ctx.client.session.prompt({        // Send prompt to session
-    path: { id: string },
-    body: { parts: Array<{ type: string, text: string }> },
-    agent?: string                  // Agent name: "sisyphus", "prometheus"
-})
-ctx.client.session.abort({ id: string })
-
-// ctx.ui - User interface
-ctx.ui.toast({
-    title: string,
-    message: string,
-    variant: "info" | "success" | "warning" | "error",
-    duration?: number
-})
-```
-
-### Agent Selection - CRITICAL
-
-**Where is the agent field?**
-
-- `UserMessage` has `agent: string` field (selected by user)
-- `AssistantMessage` does NOT have an agent field
-
-```typescript
-// Get selected agent from session messages
-async function getSessionAgent(ctx: any, sid: string): Promise<string | undefined> {
-    const messages = await ctx.client.session.messages({ id: sid })
-    
-    // Find most recent user message with agent field
-    const reversed = [...messages].reverse()
-    const lastUserWithAgent = reversed.find(
-        m => m.role === "user" && "agent" in m
-    )
-    
-    const agent = (lastUserWithAgent as any)?.agent
-    return typeof agent === "string" && agent.length > 0 ? agent : undefined
-}
-```
-
-### Event System (Real SSE Events)
-
-The "Event Bus" section uses fake `Bus.publish()` - **the real system uses SSE events**:
-
-```typescript
-// Real event hook structure
-return {
-    event: async ({ event }) => {
-        const type = event.type as string
-        const props = event.properties as Record<string, unknown> | undefined
-        const sessionID = event.sessionID as string | undefined
-        
-        switch (type) {
-            case "session.status": {
-                const status = props?.status as any
-                if (status?.type === "idle") {
-                    // Session finished work
-                } else if (status?.type === "busy") {
-                    // Session is working
-                } else if (status?.type === "retry") {
-                    // Retry attempt (has attempt, message, next)
-                }
-                break
-            }
-            case "session.error": {
-                const error = props?.error as any
-                break
-            }
-            case "message.updated": {
-                // Message was updated
-                break
-            }
-            case "message.part.updated": {
-                const delta = props?.delta as string | undefined
-                // Streaming text delta
-                break
-            }
-        }
-    }
-}
-```
-
-### SessionStatus Types
-
-```typescript
-type SessionStatus = 
-    | { type: "idle" }
-    | { type: "busy" }
-    | { type: "retry", attempt: number, message: string, next: number }
-```
-
-### Message SDK Types (from @opencode-ai/sdk)
-
-```typescript
-interface UserMessage {
-    id: string
-    sessionID: string
-    role: "user"
-    time: { created: number }
-    agent: string          // SELECTED AGENT - critical for resume
-    model: { providerID: string, modelID: string }
-    tools?: { [key: string]: boolean }
-    system?: string
-    summary?: { title?: string, body?: string, diffs: any[] }
-}
-
-interface AssistantMessage {
-    id: string
-    sessionID: string
-    role: "assistant"
-    time: { created: number, completed?: number }
-    error?: any           // Error info if failed
-    parentID: string
-    modelID: string
-    providerID: string
-    mode: string
-    path: { cwd: string, root: string }
-    cost: number
-    tokens: { input: number, output: number, reasoning: number, cache: { read: number, write: number } }
-    finish?: string        // "stop" | "length" | "error" | "unknown"
-}
-```
-
-### Part Types
-
-```typescript
-type Part = 
-    | { type: "text", text: string, synthetic?: boolean }
-    | { type: "tool", callID: string, tool: string, state: ToolState }
-    | { type: "reasoning", text: string }
-    | { type: "file", mime: string, url: string }
-    | { type: "agent", name: string }
-    | { type: "step-start", snapshot?: any }
-    | { type: "step-finish", reason: string, cost: number, tokens: any }
-    | { type: "subtask", prompt: string, description: string, agent: string }
-    | { type: "retry", attempt: number, error: string }
-    | { type: "compaction", auto: boolean }
-
-type ToolState = 
-    | { status: "pending", input: any, raw: any }
-    | { status: "running", input: any, title?: string, time: { start: number } }
-    | { status: "completed", input: any, output: any, title: string, metadata: any, time: { start: number, end: number } }
-    | { status: "error", input: any, error: any, time: { start: number, end: number } }
-```
-
-### Configuration (inline options)
-
-The official docs show plugin as object, but **options are inline in opencode.jsonc**:
-
-```jsonc
-{
-    "plugin": [
-        "file:///absolute/path/to/dist/index.js",
-        { "option": "value", "enabled": true }
-    ]
-}
-```
-
-Options are passed as second parameter to the async function:
-
-```typescript
-export const MyPlugin = async (ctx, options: { enabled?: boolean } = {}) => {
-    if (options.enabled === false) {
-        return { event: async () => {}, config: async () => {} }
-    }
-    // ... plugin logic
-}
-```
-
-### Type Validation - CRITICAL
-
-**Always validate inputs before API calls** to prevent "Expected 'id' to be a string" errors:
-
-```typescript
-// Bad - will crash if sid is invalid
-await ctx.client.session.prompt({ path: { id: sid }, ... })
-
-// Good - defensive validation
-const validSid = (typeof sid === "string" && sid.length > 0) ? sid : undefined
-const validAgent = (typeof agent === "string" && agent.length > 0) ? agent : undefined
-
-if (validSid) {
-    await ctx.client.session.prompt({
-        path: { id: validSid },
-        body: { parts: [...] },
-        agent: validAgent
-    })
-}
-```
-
-### Build Configuration
-
-```json
-{
-    "scripts": {
-        "build": "bun build src/index.ts --outdir dist --target bun",
-        "dev": "bun build src/index.ts --outdir dist --target bun --watch",
-        "prepublishOnly": "bun run build"
-    }
-}
-```
-
-Output goes to `dist/index.js` - use absolute path in opencode.jsonc:
-
-```jsonc
-{
-    "plugin": [
-        "file:///home/user/project/opencode-auto-resume/dist/index.js",
-        { "enabled": true }
-    ]
-}
-```
-
-### Testing Pattern
-
-```typescript
-import { mock } from "bun:test"
-import type { Session, UserMessage, Message } from "@opencode-ai/sdk"
-
-const createMockContext = () => {
-    const promptCalls: Array<{ sid: string; agent?: string }> = []
-    
-    const ctx = {
-        client: {
-            app: { log: mock(async () => {}) },
-            session: {
-                list: mock(async () => ({ data: sessions })),
-                messages: mock(async (path) => messages.get(path.id) ?? []),
-                prompt: mock(async (cfg) => promptCalls.push({ 
-                    sid: cfg.path.id, 
-                    agent: cfg.agent 
-                })),
-                abort: mock(async () => ({}))
-            }
-        },
-        ui: { toast: mock(async () => {}) }
-    } as any
-    
-    return { ctx, promptCalls }
-}
-
-test("plugin preserves agent on resume", async () => {
-    const { ctx, promptCalls } = createMockContext()
-    const hooks = await AutoResumePlugin(ctx, {})
-    
-    // Trigger event
-    await hooks.event({ 
-        event: { type: "session.status", sessionID: "s1", 
-            properties: { status: { type: "idle" } } 
-        } 
-    })
-    
-    // Verify agent was passed
-    expect(promptCalls[0]?.agent).toBe("prometheus")
-})
-```
-
-### Common Bugs Discovered
-
-1. **Wrong message type for agent**: Used `AssistantMessage` instead of `UserMessage`
-2. **Missing type validation**: "Expected 'id' to be a string" when session is in error state
-3. **Wrong hook format**: Returned object from `ctx.on()` instead of `{ event, config }` hooks
-4. **Subagent hangs forever**: No timeout set on spawned subagents
-5. **Event handler crashes**: Handlers throwing errors instead of catching them
-
-### Real World Patterns
-
-**Auto-resume on idle:**
-
-```typescript
-async function handleIdleSession(ctx: any, sid: string) {
-    const messages = await ctx.client.session.messages({ id: sid })
-    const lastMsg = messages[messages.length - 1]
-    
-    // Check if last message ends with continuation prompt
-    if (lastMsg?.role === "assistant" && shouldAutoContinue(lastMsg)) {
-        const agent = await getSessionAgent(ctx, sid)
-        await ctx.client.session.prompt({
-            path: { id: sid },
-            body: { parts: [{ type: "text", text: "continue" }] },
-            agent: agent
-        })
-    }
-}
-
-function shouldAutoContinue(msg: Message): boolean {
-    const text = (msg as any).parts?.[0]?.text ?? ""
-    return text.endsWith("Ready to continue with Task") || 
-           text.includes("Should I continue?") ||
-           text.includes("What would you like to do next?")
-}
-```
-
-**Hallucination loop detection:**
-
-```typescript
-interface SessionWatch {
-    status: string
-    continueCount: number
-    lastContinueAt: number
-}
-
-const sessions = new Map<string, SessionWatch>()
-
-function recordContinue(sid: string) {
-    const w = sessions.get(sid) ?? { status: "unknown", continueCount: 0, lastContinueAt: 0 }
-    const now = Date.now()
-    
-    // Reset if more than 10 minutes since last continue
-    if (now - w.lastContinueAt > 600000) {
-        w.continueCount = 0
-    }
-    
-    w.continueCount++
-    w.lastContinueAt = now
-    sessions.set(sid, w)
-}
-
-function isLoopDetected(sid: string): boolean {
-    const w = sessions.get(sid)
-    return w !== undefined && w.continueCount >= 3
-}
-```
-
-
-- SDK types: `node_modules/@opencode-ai/sdk/dist/index.d.ts`
-- OpenCode core: `https://github.com/anomalyco/opencode`
-- Plugin source: `packages/opencode/src/plugin/`
+- [ ] `dist/index.js` exports ONLY `default` (and optionally a named alias of the same function)
+- [ ] `event` hook wraps async work in `.catch()`
+- [ ] All `setInterval` async bodies wrapped in try/catch or `safe()`
+- [ ] `log()` helper never rethrows
+- [ ] All event payload fields validated (`Array.isArray`, `typeof`, `?.`)
+- [ ] All SDK calls validate `sid` first
+- [ ] `session.status()` accessed via `.type`, never compared as bare string
+- [ ] Tests include source-contract assertions (not just behavioral)
+- [ ] `bun test` passes with 0 failures
+- [ ] `bun build` produces `dist/index.js` with only Plugin exports

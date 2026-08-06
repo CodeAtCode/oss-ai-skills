@@ -19,7 +19,9 @@ Complete reference for building fast, type-safe REST APIs with Django and Pydant
 
 ## Overview
 
-Django Ninja is a web framework for building APIs with Django and Python 3.6+ type hints. It provides automatic request validation, response serialization, and generates OpenAPI documentation.
+Django Ninja is a web framework for building APIs with Django and Python 3.6+ type hints.
+
+**Versions**: django-ninja 1.6.x + Django 6.0 compatible. Requires Pydantic v2. It provides automatic request validation, response serialization, and generates OpenAPI documentation.
 
 **Key Features:**
 - Fast: Built on Pydantic for high performance
@@ -105,6 +107,19 @@ myproject/
 ```
 
 ## Schema Definitions
+
+### Pydantic v2 Context Support
+
+```python
+# Django 6.0+ context access in schemas
+class Payload(Schema):
+    id: int
+    request_path: str
+    
+    @staticmethod
+    def resolve_request_path(data, context):
+        return context["request"].get_full_path()
+```
 
 ### Basic Schema
 

@@ -21,6 +21,8 @@ Modern Django admin theme with beautiful design and advanced features.
 ## Overview
 
 Unfold is a modern theme for Django admin that provides:
+
+**Versions**: django-unfold 0.76.x + Django 6.0 fully compatible.
 - **Beautiful design** - Modern UI with Tailwind CSS
 - **Dark mode** - Built-in dark theme support
 - **Custom components** - Charts, tables, cards, buttons
@@ -259,6 +261,21 @@ class ArticleAdmin(ModelAdmin):
     def export_csv(self, request, queryset):
         # Export logic
         pass
+```
+
+### @display Decorator (Django 6.0+)
+
+```python
+from unfold.decorators import display
+
+class UserAdmin(ModelAdmin):
+    @display(description="Status", boolean=True)
+    def is_active(self, obj):
+        return obj.is_active
+    
+    @display(description="Actions", order="username")
+    def user_actions(self, obj):
+        return f"{obj.first_name} {obj.last_name}"
 ```
 
 ### Cards

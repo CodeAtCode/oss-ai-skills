@@ -1604,6 +1604,26 @@ Product.objects.filter(data__specs__memory__gte=16)
 
 ## Django 6.0 Essentials
 
+### Middleware Changes
+
+- **CommonMiddleware deprecated** → Use `StaticFileMiddleware` for static file serving
+- **CSP nonce improvements** - Built-in nonce support via `{% csp_nonce %}` template tag
+
+### Test Client
+
+- **`django.test.Client` class removed** → Use `LiveServerTestCase` for integration tests
+
+### Static Files
+
+- **`STATICFILES_STORAGE` removed** → Use `STORAGES` dict:
+```python
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
+    }
+}
+```
+
 ### Tasks Framework (NEW - replacing Celery for simple needs)
 
 ```python
