@@ -34,7 +34,9 @@ This repository provides reusable skill definitions that can be loaded into AI c
 | [android-apk-patch](frameworks/android-apk-patch/SKILL.md) | Modify, repackage, test Android APKs - split APK handling, GApps workarounds, signing, Frida instrumentation, redroid/Waydroid testing | 1,565 | android, apk, patching, smali, signing, split-apk, gapps, frida, redroid, waydroid |
 | [BPCore Engine](frameworks/bpcore-engine/SKILL.md) | Lua game framework for GBA - API reference, sprites, entities, collision, audio, save/load SRAM, multiplayer protocol | 873 | lua, gba, game-engine, gameboy-advance |
 | [Celery](frameworks/celery/SKILL.md) | Distributed task queue - Redis/RabbitMQ brokers, periodic tasks, Django integration | 1,250 | python, task-queue, async, distributed, celery |
-| [Django](frameworks/django/SKILL.md) | Security, ORM, PostgreSQL, GeoDjango, Django 6.0 essentials, admin extensions, middleware, authentication, sessions, ecosystem tools | 1,727 | python, django, web-framework, async, hub |
+| [Django](frameworks/django/SKILL.md) | Security, ORM, PostgreSQL, GeoDjango, Django 6.0 essentials, admin extensions, middleware, authentication, sessions, ecosystem tools | 2,336 | python, django, web-framework, async, hub |
+|   ↳ [django-admin](frameworks/django-admin/SKILL.md) | Django Admin - save_formset, get_search_results, get_formset, queryset optimization, db_index | 491 | python, django, admin, orm, optimization |
+|   ↳ [django-transaction](frameworks/django-transaction/SKILL.md) | Django transactions & concurrency - atomic, select_for_update, on_commit, upserts, M2M ordering | 496 | python, django, transactions, concurrency, orm |
 | [Django Bolt](frameworks/django-bolt/SKILL.md) | Rust-powered high-performance API framework - 60k+ RPS, decorator routing, built-in auth, async ORM | 2,567 | python, django, bolt, api, rust, performance, async |
 | [Django Celery](frameworks/django-celery/SKILL.md) | Django Celery integration - distributed tasks, django-celery-beat scheduling, monitoring | ~700 | python, django, celery, task-queue, periodic-tasks, django-celery-beat |
 | [Django HTMX](frameworks/django-htmx/SKILL.md) | Build modern dynamic web apps with Django and htmx - partial rendering, HTMX-specific responses, querystring tag, CSP nonce support, Django 6.0 compatible | 487 | django, htmx, python, web, frontend, partial-rendering |
@@ -76,7 +78,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 
 | Skill | Description | Lines | Tags |
 |-------|-------------|-------|------|
-| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Rust pitfalls - compiler errors, struct constructors, test organization, module splitting, thiserror error design, panic elimination | 1,208 | rust, pitfalls, best-practices, common-errors, testing |
+| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Rust pitfalls - compiler errors, struct constructors, test organization, module splitting, thiserror error design, panic elimination | 1,470 | rust, pitfalls, best-practices, common-errors, testing |
 
 ## Skill Format
 

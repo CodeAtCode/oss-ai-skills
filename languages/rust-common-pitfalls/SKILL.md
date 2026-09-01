@@ -3,7 +3,7 @@ name: rust-common-pitfalls
 description: "Common Rust development pitfalls: frequent compiler errors, struct constructor patterns, test organization, and coverage enforcement for reliable codebases."
 metadata:
   author: mte90
-  version: "1.0.0"
+  version: "1.1.0"
   tags:
     - rust
     - compiler-errors
@@ -77,6 +77,10 @@ fn get_str() -> &'static str {
 
 **Cause**: Type inference failure or expected vs actual type mismatch.
 
+**Real-World Examples from baco** (ses_1015b0539ffe):
+- String vs &String drift in security_agent_verification.rs
+- u32 vs usize mismatch in loop counters and array indexing
+
 **Solution**:
 ```rust
 // Problem: Expected i32, got &str
@@ -148,6 +152,101 @@ let v: Vec<i32> = vec![1, 2, 3].iter().map(|x| x * 2).collect();
 // Or collect into specific type
 use std::collections::HashMap;
 let m: HashMap<_, _> = vec![(1, "a"), (2, "b")].into_iter().collect();
+```
+
+### E0382: Use of moved value
+
+**Cause**: Value moved into another owner, then used again.
+
+**Solution**:
+```rust
+// Problem: String moved to vec, then used
+let s = String::from("hello");
+let v = vec![s];  // s moved
+println!("{}", s);  // ERROR: use after move
+
+// Fix: Clone or borrow
+let s = String::from("hello");
+let v = vec![s.clone()];  // Clone ownership
+println!("{}", s);  // OK
+
+// Or borrow if clone is expensive
+let s = String::from("hello");
+let v = vec![&s];  // Borrow
+println!("{}", s);  // OK
+```
+
+### E0502: Cannot borrow as immutable because it is also borrowed as mutable
+
+**Cause**: Simultaneous mutable and immutable borrows violate Rust's borrowing rules.
+
+**Solution**:
+```rust
+// Problem: mutable borrow while immutable borrow active
+let mut v = vec![1, 2, 3];
+let first = &v[0];  // immutable borrow
+v.push(4);  // ERROR: mutable borrow while immutable active
+println!("{}", first);
+
+// Fix: Limit immutable borrow scope
+let mut v = vec![1, 2, 3];
+let first = v[0];  // Copy (i32 implements Copy)
+v.push(4);
+println!("{}", first);
+
+// Or separate scopes for references
+let mut v = vec![1, 2, 3];
+{
+    let first = &v[0];  // immutable borrow
+    println!("{}", first);
+}  // borrow ends
+v.push(4);  // now OK
+```
+
+### E0507: Cannot move out of borrowed content
+
+**Cause**: Trying to move a value out of a reference or container.
+
+**Solution**:
+```rust
+// Problem: Moving out of Option in reference
+struct Container { data: Option<String> }
+fn extract(c: &Container) -> String {
+    c.data.take().unwrap()  // ERROR: cannot move out of &Option
+}
+
+// Fix: Use take() to replace with None
+fn extract(c: &mut Container) -> String {
+    c.data.take().unwrap()  // OK: takes ownership, leaves None
+}
+
+// Or clone if mutation not possible
+fn extract(c: &Container) -> String {
+    c.data.clone().unwrap()  // OK: clones the String
+}
+```
+
+### E0716: Temporary value dropped while borrowed
+
+**Cause**: Reference to temporary that gets dropped at end of statement.
+
+**Solution**:
+```rust
+// Problem: Temporary string literal dropped
+fn get_line() -> &str {
+    String::from("hello").as_str()  // ERROR: temp dropped
+}
+
+// Fix: Return owned String
+fn get_line() -> String {
+    String::from("hello")
+}
+
+// Or use static lifetime for constants
+fn get_line() -> &'static str {
+    "hello"  // Static string literal
+}
+```
 ```
 
 ---
@@ -578,6 +677,55 @@ cargo llvm-cov --json --output-path coverage.json
 
 ### Thread Safety with Send + Sync
 
+**Thin Send/Sync for async**: Most async types are `!Send` by default. Use `Arc<T>` for shared state across tasks.
+
+```rust
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+
+// Rc/RefCell are !Send and !Sync — use only in single-threaded contexts
+// BAD for async: Rc<String> cannot cross task boundaries
+
+// GOOD: Arc for shared ownership across tasks
+#[derive(Clone)]
+struct SharedState {
+    data: Arc<RwLock<Vec<String>>>,  // RwLock better for read-heavy workloads
+}
+
+// Arc<Mutex<T>> vs Arc<RwLock<T>>:
+// - Mutex: single writer, any reader (but only one holder total)
+// - RwLock: multiple readers OR single writer (better for read-heavy)
+// In async: prefer tokio::sync::{Mutex, RwLock}, not std::sync::*
+```
+
+**Async-specific Send/Sync issues**:
+```rust
+use tokio::task::JoinSet;
+
+// !Send futures: Cannot be sent to another thread
+async fn non_send_task() {
+    let data = std::rc::Rc::new(42);  // Rc is !Send
+    // This future cannot be .spawn()ed on multi-threaded runtime
+}
+
+// JoinSet requires Send + 'static
+let mut set = JoinSet::new();
+set.spawn(async {
+    // Must be Send + 'static
+});
+
+// select! cancellation: Ensure futures are cancel-safe
+// Avoid holding locks across .await points when possible
+select! {
+    result = async_task => {
+        // Handle result
+    },
+    _ = cancellation_token.cancelled() => {
+        // Cleanup: ensure locks are released
+    }
+}
+```
+
 ```rust
 use std::sync::{Arc, Mutex};
 
@@ -618,6 +766,27 @@ fn good_example(m1: &Mutex<i32>, m2: &Mutex<String>) {
 }  // Locks released in reverse order
 ```
 
+### Testing: #[tokio::test] and rstest
+
+```rust
+// Basic async test
+#[tokio::test]
+async fn test_async_function() {
+    let result = async_fn().await;
+    assert_eq!(result, expected);
+}
+
+// Parametrized tests with rstest
+use rstest::rstest;
+
+#[rstest]
+#[case(1, 2)]
+#[case(5, 10)]
+async fn test_with_cases(#[case] input: i32, #[case] expected: i32) {
+    assert_eq!(process(input).await, expected);
+}
+```
+
 ### Async Best Practices
 
 ```rust
@@ -645,7 +814,80 @@ async fn bad_example() {
 ```
 
 ---
-## Part 6: Module Splitting Strategies
+## Part 6: Module Splitting Strategies and Dead Code Detection
+
+### Field Log from baco: Undeclared Modules and #[ignore] Accumulation
+
+**Pitfall #1: Module file exists but never declared in lib.rs** (ses_125f87e23ffe)
+
+Silent dead code: 9 dead modules, 3274 lines in baco (e.g., attack_scenarios.rs:474, endpoints.rs:248).
+
+**Detection**:
+```bash
+# Audit mod declarations vs file existence
+cargo-modules tree --format json  # Requires cargo-modules crate
+
+# Manual grep: find .rs files without corresponding `mod` in lib.rs
+find src -name "*.rs" -exec grep -L "mod {}" lib.rs \;
+
+# Check for orphaned modules
+grep -r "^mod " src/ | cut -d: -f2 | sed 's/mod //;s/;//' | sort > /tmp/declared_mods.txt
+find src -name "*.rs" | sed 's|.*/||;s/\.rs$//' | sort > /tmp/files.txt
+comm -23 /tmp/files.txt /tmp/declared_mods.txt  # Shows undeclared files
+```
+
+**Pitfall #8: Disabled #[ignore]/#[cfg] tests as dead weight** (ses_125f87e23ffe)
+
+3 tests, 208 lines of dead code in baco from accumulated `#[ignore]` tests.
+
+**Detection**:
+```bash
+# Find ignored tests
+grep -rn "#\[ignore\]" src/ tests/
+
+# Find cfg-gated dead code
+grep -rn "#\[cfg(not(test))\]" src/ | grep -v "// "
+
+# Count disabled tests
+cargo test -- --list 2>/dev/null | grep -c "ignored"
+```
+
+### Duplicate Code Detection
+
+**Pitfall #5-7 from baco** (ses_125f87e23ffe, ses_1015b0539ffe):
+
+- Cross-phase boilerplate duplication: LLM client config x3 → deduplicated to `create_llm_client_with_metrics()` in src/llm.rs (-36 lines)
+- Intra-file duplicate blocks: conflict_resolver.rs:24-33 == :37-41 (39 tokens)
+- Cross-file duplicates: indexing.rs:46-51 == llm_static.rs:83-88 (44 tokens; 73 groups total)
+
+**Detection with aft_inspect**:
+```bash
+# Run inspect to find duplicate groups
+aft_inspect --sections duplicates
+```
+
+**Manual detection**:
+```bash
+# Use fdupes or rdfind for exact duplicates
+fdupes -r src/
+
+# For semantic duplicates: use cargo-deny or custom diff scripts
+# Pattern: extract function, check if same logic appears elsewhere
+grep -rn "fn create_llm_client" src/  # Should be 1, not 3
+```
+
+**Fix pattern**: Extract common logic to shared helper:
+```rust
+// Before: 3 copies of LLM client creation
+async fn scan_llm_client() -> LLMClient { ... }
+async fn index_llm_client() -> LLMClient { ... }
+async fn report_llm_client() -> LLMClient { ... }
+
+// After: Single source of truth
+async fn create_llm_client_with_metrics(phase: &str) -> LLMClient {
+    // Shared logic with phase-specific metrics
+}
+```
 
 ### When to Split a Module
 
@@ -1041,9 +1283,29 @@ fn parse_config(content: &str) -> Result<Config, ConfigError> {
 | `unwrap()` on `parse()` | Invalid format | `parse().map_err(...)?` |
 | `expect()` on fallible I/O | File not found, permissions | Return `Result` instead |
 
-### Audit Techniques
+### Audit Techniques with Clippy
 
-Find production `.unwrap()` calls:
+Replace raw grep with clippy lints and structured error handling:
+
+```bash
+# Use clippy lints instead of grep
+cargo clippy -- -D clippy::expect_used -D clippy::unwrap_used
+```
+
+```rust
+// Add #[track_caller] for better panic locations
+#[track_caller]
+fn panic_with_location(msg: &str) {
+    panic!("{}", msg);  // Panic reports caller's location
+}
+
+// For FFI boundaries: catch_unwind
+use std::panic::{catch_unwind, AssertUnwindSafe};
+
+fn safe_ffi_call(f: impl FnOnce() + Send) -> Result<(), ()> {
+    catch_unwind(AssertUnwindSafe(f)).map_err(|_| ())
+}
+```
 
 ```bash
 # Find all unwraps except in test code

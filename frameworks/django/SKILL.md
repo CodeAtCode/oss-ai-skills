@@ -3,7 +3,7 @@ name: django
 description: "Comprehensive Django guide - security, ORM, PostgreSQL, GeoDjango, Django 6.0 features, admin extensions, middleware, authentication, sessions, and ecosystem tools"
 metadata:
   author: mte90
-  version: 2.1.0
+  version: 2.3.0
   tags:
     - python
     - django
@@ -34,6 +34,13 @@ Django provides robust security features out of the box:
 - **Sessions** - Secure session management
 - **Security Middleware** - Various security headers
 - **Password Hashing** - Secure password storage
+
+## Specialized Skills
+
+For deeper coverage of specific domains, see these dedicated skills:
+
+- ↳ **[django-admin](frameworks/django-admin/SKILL.md)** — Admin save_formset/get_search_results/db_index patterns
+- ↳ **[django-transaction](frameworks/django-transaction/SKILL.md)** — atomic/select_for_update/on_commit/upserts
 
 ---
 
@@ -263,6 +270,7 @@ LOGOUT_REDIRECT_URL = '/'
 
 ```python
 from django.contrib.auth import authenticate, login, logout
+from secrets import compare_digest
 
 def login_view(request):
     username = request.POST.get('username')
@@ -288,6 +296,52 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('home')
+
+### Constant-Time Token Comparison
+
+**CRITICAL**: Use `secrets.compare_digest()` for token/API key comparison - prevents timing attacks:
+
+```python
+from secrets import compare_digest
+from django.conf import settings
+
+def verify_api_key(requested_key: str) -> bool:
+    """Constant-time comparison prevents timing attacks."""
+    # NEVER use: requested_key == settings.API_KEY
+    # Timing attack: attacker measures response time to guess key char by char
+    return compare_digest(requested_key, settings.API_KEY)
+
+# Case-insensitive token comparison
+def verify_token(requested_token: str, expected_token: str) -> bool:
+    """Case-insensitive constant-time comparison."""
+    return compare_digest(
+        requested_token.lower().strip(),
+        expected_token.lower().strip()
+    )
+```
+
+### Never Trust POSTed Identity Fields (HTMX)
+
+**CRITICAL**: With HTMX partial submissions, POST data can be manipulated. Always use `request.user`:
+
+```python
+# BAD - Trusting POSTed identity
+def update_profile(request):
+    user_id = request.POST.get('user_id')  # ⚠️ Attacker can change this!
+    user = User.objects.get(id=user_id)
+    user.name = request.POST.get('name')
+    user.save()
+
+# GOOD - Use request.user
+@login_required
+def update_profile(request):
+    # Identity comes from authentication, not POST
+    user = request.user  # ✅ Authenticated user
+    user.name = request.POST.get('name')  # Only update allowed fields
+    user.save()
+```
+
+**HTMX-specific vulnerability**: HTMX forms often submit partial data. If your form includes `user_id` or other identity fields in the POST, attackers can manipulate them. The authentication middleware already set `request.user` - use it.
 ```
 
 ### Authentication Form
@@ -770,6 +824,28 @@ SECURE_CONTENT_SECURITY_POLICY = "default-src 'self'"
 
 ## ORM Optimization
 
+### Indexing Strategy
+
+**db_index on filter/search fields** - Critical for API performance:
+
+```python
+class Product(models.Model):
+    # Add db_index to frequently filtered fields
+    sku = models.CharField(max_length=50, db_index=True, unique=True)
+    category = models.ForeignKey(Category, db_index=True)
+    status = models.CharField(max_length=20, db_index=True)  # Filter by status
+    created_at = models.DateTimeField(db_index=True)  # Date range queries
+    
+    # Composite index for common query patterns
+    class Meta:
+        indexes = [
+            models.Index(fields=['category', 'status']),
+            models.Index(fields=['-created_at']),
+        ]
+```
+
+> **Admin-specific optimization**: For admin queryset optimization (select_related/prefetch_related patterns, N+1 prevention in list_display), see the [django-admin skill](frameworks/django-admin/SKILL.md).
+
 ### Avoiding Duplicate Objects with Exists Subquery
 
 When filtering across relationships (one-to-many or many-to-many), JOINs produce duplicate parent objects:
@@ -1079,6 +1155,110 @@ CACHES = {
 
 ## Testing Optimization
 
+### HTMX Error Branch Coverage
+
+Test HTMX-specific error paths that regular tests miss:
+
+```python
+from django.test import Client
+
+def test_htmx_form_validation_error(client):
+    """HTMX requests need different error handling."""
+    response = client.post(
+        '/partial-form/',
+        {'field': 'invalid'},
+        HTTP_HX_REQUEST='true',  # HTMX header
+    )
+    # HTMX returns partial HTML, not redirect
+    assert response.status_code == 200
+    assert b'error-message' in response.content
+    # No full page redirect for HTMX requests
+
+
+def test_htmx_identity_fields_untrusted(client):
+    """Never trust POSTed identity fields with HTMX."""
+    # User logged in as user_id=5
+    client.force_login(User.objects.get(id=5))
+    
+    # Malicious HTMX form tries to change user_id
+    response = client.post(
+        '/update-profile/',
+        {'user_id': 999, 'name': 'Hacker'},  # user_id in POST!
+        HTTP_HX_REQUEST='true',
+    )
+    # Should ignore user_id from POST, use request.user
+    assert User.objects.get(id=5).name == 'Hacker'
+    assert User.objects.get(id=999).name != 'Hacker'
+```
+
+### Formset Tests with Real Tuple Shape
+
+Django admin formsets return specific tuple shapes - test with real data:
+
+```python
+from django.contrib import admin
+from django.test import TestCase
+from myapp.models import Parent, Child
+
+class ParentAdminTest(TestCase):
+    def setUp(self):
+        self.parent = Parent.objects.create(name='Parent')
+        self.child1 = Child.objects.create(parent=self.parent, name='Child 1')
+        self.child2 = Child.objects.create(parent=self.parent, name='Child 2')
+    
+    def test_save_formset_tuple_shape(self):
+        """save_formset receives [(obj, changed_data)] not bare lists."""
+        admin_instance = admin.site._registry[Parent]
+        
+        # Mock POST with changed child
+        data = {
+            'child_set-0-id': self.child1.id,
+            'child_set-0-name': 'Updated Child 1',  # Changed
+            'child_set-1-id': self.child2.id,
+            'child_set-1-name': 'Child 2',  # Unchanged
+            'child_set-TOTAL_FORMS': 2,
+            'child_set-INITIAL_FORMS': 2,
+        }
+        
+        # Track what save_formset receives
+        changed_objects = []
+        
+        def mock_save_formset(parent, formset, **kwargs):
+            # Shape: [(instance, {field: old_value}), ...]
+            changed_objects.extend(formset.changed_objects)
+        
+        # Patch and submit
+        original_save = admin_instance.save_formset
+        admin_instance.save_formset = mock_save_formset
+        
+        try:
+            self.client.post('/admin/myapp/parent/{}/change/'.format(self.parent.id), data)
+        finally:
+            admin_instance.save_formset = original_save
+        
+        # Verify shape
+        assert len(changed_objects) == 1
+        obj, changed_data = changed_objects[0]
+        assert obj.id == self.child1.id
+        assert 'name' in changed_data
+        assert changed_data['name'] == 'Updated Child 1'
+```
+
+### Coverage-Audit Cross-Reference
+
+Verify test coverage matches actual code paths:
+
+```bash
+# Run coverage and check branches
+pytest --cov=myapp --cov-report=html
+
+# Check specific error branches
+pytest -k "test_htmx" --cov=myapp.views --cov-report=term-missing
+
+# Cross-reference with TODOs
+grep -r "TODO\|FIXME" myapp/ | grep -v test
+```
+
 ### Fast Password Hashing for Tests
 
 ```python
@@ -1129,6 +1309,92 @@ def test_something(self):
 ---
 
 ## Migrations
+
+### Post-Rename Dead-Reference Audit Checklist
+
+After renaming fields, audit for dead references:
+
+```bash
+# 1. Search for old field name in code
+grep -r "old_field_name" --include="*.py" . | grep -v migration | grep -v __pycache__
+
+# 2. Search in templates
+grep -r "old_field_name" --include="*.html" .
+
+# 3. Search in admin configurations
+grep -r "list_display.*old_field_name" --include="*.py" .
+
+# 4. Search in forms
+grep -r "fields.*=.*\['old_field_name'" --include="*.py" .
+
+# 5. Search in serializers
+grep -r "old_field_name" --include="*.py" serializers.py
+
+# 6. Check for hardcoded field names in queries
+grep -r "filter.*old_field_name" --include="*.py" .
+```
+
+**Checklist**:
+- [ ] Models.py - field references
+- [ ] Admin.py - list_display, list_filter, search_fields
+- [ ] Forms.py - field definitions
+- [ ] Serializers.py - field serialization
+- [ ] Templates.py - template variable references
+- [ ] Views.py - query filters, order_by
+- [ ] Tests.py - test data assertions
+- [ ] API documentation - Swagger/OpenAPI specs
+- [ ] External integrations - webhooks, API consumers
+
+### Add Unique Constraints Before Relying on Upserts
+
+Ensure upserts work correctly with unique constraints:
+
+```python
+from django.db import migrations, models
+
+class Migration(migrations.Migration):
+    
+    dependencies = [
+        ('myapp', '0001_initial'),
+    ]
+    
+    operations = [
+        # 1. Add unique constraint FIRST
+        migrations.AddConstraint(
+            model_name='externalresource',
+            constraint=models.UniqueConstraint(
+                fields=['external_id'],
+                name='unique_external_id'
+            ),
+        ),
+        
+        # 2. Then data migration to dedupe
+        migrations.RunPython(
+            deduplicate_external_resources,
+            reverse_code=migrations.RunPython.noop
+        ),
+        
+        # 3. Now update_or_create will work reliably
+        # (no code change needed - just ensure this migration runs first)
+    ]
+
+def deduplicate_external_resources(apps, schema_editor):
+    ExternalResource = apps.get_model('myapp', 'ExternalResource')
+    
+    # Group by external_id
+    from django.db.models import Count
+    duplicates = ExternalResource.objects.values(
+        'external_id'
+    ).annotate(count=Count('id')).filter(count__gt=1)
+    
+    for dup in duplicates:
+        # Keep oldest, delete rest
+        ids = list(ExternalResource.objects.filter(
+            external_id=dup['external_id']
+        ).order_by('-created_at').values_list('id', flat=True)[1:])
+        
+        ExternalResource.objects.filter(id__in=ids).delete()
+```
 
 ### Squashing Migrations
 
@@ -1721,6 +1987,157 @@ urlpatterns = [
     path("admin/dj-control-room/", include("dj_control_room.urls")),
 ]
 ```
+
+
+## External API Integration Patterns
+
+### Sync-State Machine PENDING/SYNCED/FAILED
+
+Track external API sync state explicitly:
+
+```python
+from django.db import models
+
+class ExternalResource(models.Model):
+    SYNC_STATUS = {
+        'PENDING': 'Pending sync',
+        'SYNCED': 'Successfully synced',
+        'FAILED': 'Sync failed',
+    }
+    
+    external_id = models.CharField(max_length=100, unique=True)
+    sync_status = models.CharField(
+        max_length=20,
+        choices=SYNC_STATUS,
+        default='PENDING'
+    )
+    sync_error = models.TextField(blank=True, null=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    
+    def mark_synced(self):
+        self.sync_status = 'SYNCED'
+        self.sync_error = ''
+        self.last_synced_at = timezone.now()
+        self.save()
+    
+    def mark_failed(self, error: str):
+        self.sync_status = 'FAILED'
+        self.sync_error = error
+        self.save()
+```
+
+### Persist sync_error, Never Swallow
+
+Always log external API errors:
+
+```python
+import requests
+from django.core.exceptions import ValidationError
+
+def sync_external_resource(resource):
+    """Sync with external API - never swallow errors."""
+    
+    try:
+        response = requests.post(
+            'https://api.example.com/sync',
+            json={'id': resource.external_id},
+            timeout=10  # ⚠️ Always set timeout
+        )
+        response.raise_for_status()
+        
+        resource.mark_synced()
+        
+    except requests.Timeout:
+        resource.mark_failed('Request timeout after 10s')
+        raise  # Re-raise for caller handling
+        
+    except requests.HTTPError as e:
+        error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+        resource.mark_failed(error_msg)
+        raise ValidationError(error_msg)
+        
+    except requests.RequestException as e:
+        error_msg = f"Network error: {str(e)}"
+        resource.mark_failed(error_msg)
+        raise ValidationError(error_msg)
+```
+
+**Key rules**:
+- Never use bare `except:` - catch specific exceptions
+- Persist `sync_error` for debugging
+- Always set timeouts (prevent hanging)
+- Re-raise after logging (don't hide failures)
+
+### Boundary Decimal Validation
+
+Validate Decimal at API boundary, not deep in logic:
+
+```python
+from decimal import Decimal, InvalidOperation
+from django.core.exceptions import ValidationError
+
+def parse_amount(value: str) -> Decimal:
+    """Validate and parse Decimal at boundary."""
+    
+    if not value:
+        raise ValidationError('Amount is required')
+    
+    try:
+        amount = Decimal(value)
+    except (InvalidOperation, ValueError):
+        raise ValidationError(f'Invalid amount: {value}')
+    
+    if amount < 0:
+        raise ValidationError('Amount must be positive')
+    
+    if amount > Decimal('999999999.99'):
+        raise ValidationError('Amount exceeds maximum')
+    
+    return amount.quantize(Decimal('0.01'))  # Round to 2 decimals
+
+# Usage in view
+def create_order(request):
+    amount = parse_amount(request.POST.get('amount'))  # ✅ Validated at boundary
+    # Rest of code trusts amount is valid
+    order = Order.objects.create(amount=amount)
+```
+
+### snapshot-vs-live (applied_reseller_percentage)
+
+Beware of stale data when using computed fields:
+
+```python
+class Order(models.Model):
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    reseller = models.ForeignKey(Reseller, on_delete=models.CASCADE)
+    applied_reseller_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        blank=True, null=True
+    )
+    
+    def calculate_total(self):
+        """Use LATEST reseller percentage, not snapshot."""
+        # ❌ WRONG - uses stored snapshot
+        # discount = self.applied_reseller_percentage
+        
+        # ✅ CORRECT - fetch live data
+        discount = self.reseller.discount_percentage
+        return self.subtotal * (1 - discount / 100)
+    
+    def save(self, *args, **kwargs):
+        """Snapshot for audit, but calculate fresh."""
+        # Store snapshot for historical records
+        self.applied_reseller_percentage = self.reseller.discount_percentage
+        super().save(*args, **kwargs)
+```
+
+**Pattern**:
+- Store snapshot for audit/history
+- Calculate from live data for accuracy
+- Document which value is "source of truth"
+
+---
+
 ## Ecosystem Libraries
 
 ### iommi
