@@ -3,7 +3,7 @@ name: django-admin
 description: "Django Admin pitfalls - save_formset, get_search_results, get_formset, admin queryset optimization, db_index"
 metadata:
   author: mte90
-  version: 1.0.0
+  version: 1.1.0
   tags:
     - python
     - django
@@ -484,9 +484,74 @@ class ParentAdmin(admin.ModelAdmin):
 ```
 
 ---
+---
+
+## Ecosystem Libraries
+
+Complementary libraries that extend Django Admin functionality:
+
+### django-admin-action-forms
+
+**URL**: https://github.com/michalpokusa/django-admin-action-forms
+
+Provides forms for admin actions with user input and validation. Allows creating admin actions that require intermediate input screens before execution.
+
+**Usage pattern**:
+```python
+from admin_action_forms import ActionForm
+
+class BulkUpdateForm(ActionForm):
+    """Action form with intermediate input screen."""
+    new_status = forms.ChoiceField(choices=STATUS_CHOICES)
+    
+    class Meta:
+        model = MyModel
+        fields = ['new_status']
+
+# Integrates with django.contrib.admin actions
+@admin.register(MyModel)
+class MyModelAdmin(admin.ModelAdmin):
+    actions = [bulk_update_action]
+```
+
+**Key features**:
+- Action forms with Form classes for user input
+- Intermediate page before action execution
+- Full integration with `django.contrib.admin` actions system
+
+### django-hijack
+
+**URL**: https://github.com/django-hijack/django-hijack
+
+Allows administrators to log in as other users without needing their credentials. Useful for debugging user-reported issues and understanding user experiences from their perspective.
+
+### django-simple-history
+
+**URL**: https://github.com/django-commons/django-simple-history
+
+Tracks model history and allows reverting to previous versions directly from the admin. Pairs well with the manual audit logging patterns shown above, providing a drop-in solution for change tracking.
+
+### django-easy-audit
+
+**URL**: https://github.com/soynatan/django-easy-audit
+
+Automatic user action tracking that monitors CRUD events, login/logout, and auth events. An alternative to manual audit logging implementation with minimal configuration required.
+
+### django-admin-sortable2
+
+**URL**: https://github.com/jrief/django-admin-sortable2
+
+Adds drag-and-drop ordering support for model inlines and related objects in the admin interface. Useful for managing ordered relationships without custom JavaScript.
+
+### django-admin-inline-paginator-plus
+
+**URL**: https://github.com/DmytroLitvinov/django-admin-inline-paginator-plus
+
+Adds pagination support for inline formsets in the admin. Particularly relevant when dealing with large numbers of inline objects, addressing challenges with the `save_formset` patterns discussed earlier.
+
+---
 
 ## References
-
 - Main Django security patterns: [frameworks/django/SKILL.md](../django/SKILL.md)
 - Django Admin documentation: https://docs.djangoproject.com/en/stable/ref/contrib/admin/
 - Django ORM optimization: https://docs.djangoproject.com/en/stable/topics/db/optimization/

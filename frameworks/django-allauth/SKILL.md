@@ -3,7 +3,7 @@ name: django-allauth
 description: "Django authentication - local accounts, social OAuth, registration, email verification, MFA, session management"
 metadata:
   author: mte90
-  version: "1.0.0"
+  version: "1.1.0"
   tags:
     - python
     - django
@@ -597,10 +597,12 @@ def verified_email_required(get_response):
 
 # settings.py
 MIDDLEWARE += ['myapp.middleware.verified_email_required']
-```
+## Ecosystem & Integrations
+
+### django-organizations
+
+Multi-user accounts and organization teams for Django projects. Complements allauth for multi-tenant account flows (user memberships, invitations).
+
+- **GitHub**: https://github.com/bennylope/django-organizations/
 
 ## References
-
-- **Official Documentation**: https://docs.allauth.org/
-- **GitHub Repository**: https://github.com/pennersr/django-allauth
-- **Stack Overflow**: https://stackoverflow.com/questions/tagged/django-allauth

@@ -3,7 +3,7 @@ name: django
 description: "Comprehensive Django guide - security, ORM, PostgreSQL, GeoDjango, Django 6.0 features, admin extensions, middleware, authentication, sessions, and ecosystem tools"
 metadata:
   author: mte90
-  version: 2.3.0
+  version: 2.4.0
   tags:
     - python
     - django
@@ -591,6 +591,12 @@ class ObjectPermissionTest(TestCase):
 | Backend not called | Not in `AUTHENTICATION_BACKENDS` | Add backend to settings list |
 | Permissions cached incorrectly | Django caches per-user perms | Call `user_obj._perm_cache.clear()` if needed |
 
+### Additional Permission Libraries
+
+Companions to django-guardian:
+- **django-rules** (https://github.com/dfunckt/django-rules) - Object-level permissions without database (pre-save hooks)
+- **django-role-permissions** (https://github.com/vintasoftware/django-role-permissions) - Role-based access control on top of Django permissions
+
 ---
 
 ## Sessions
@@ -907,10 +913,17 @@ for user in users:
 ```python
 # BAD: Makes new query
 first_group = user.groups.first()
-
-# GOOD: Uses in-memory data
 first_group = user.groups.all()[0]
-```
+
+---
+
+### N+1 Detection Tools
+
+For automated N+1 detection in development:
+- **django-debug-toolbar** (https://github.com/django-commons/django-debug-toolbar) - SQL panel shows query count/origin
+- **django-zeal** (https://github.com/taobojlen/django-zeal) - N+1 detector with warnings/errors
+- **django-silk** (https://github.com/jazzband/django-silk) - Profiling with SQL inspection
+- **django-auto-prefetch** (https://github.com/adamchainz/django-auto-prefetch) - Auto prefetch FKs on serializer-like access
 
 ### Time-Based Lookups Performance
 
@@ -957,7 +970,10 @@ DATABASES = {
 }
 ```
 
----
+### Caching Libraries
+
+- **django-cachalot** (https://github.com/noripyt/django-cachalot) - Auto-invalidating cache for ORM queries
+- **django-cacheops** (https://github.com/Suor/django-cacheops) - Transaction-aware cache with auto-invalidation
 
 ## Django Tasks Framework (Django 6.0+)
 
@@ -2068,6 +2084,10 @@ def sync_external_resource(resource):
 - Always set timeouts (prevent hanging)
 - Re-raise after logging (don't hide failures)
 
+### Webhooks for Sync State
+
+- **django-webhook** (https://github.com/danihodovic/django-webhook) - Send outgoing webhooks on model changes (fits sync-state pattern with PENDING/SYNCED/FAILED)
+
 ### Boundary Decimal Validation
 
 Validate Decimal at API boundary, not deep in logic:
@@ -2311,16 +2331,31 @@ A simple utility that lets you configure your Django `DATABASES` setting from a 
 ```bash
 pip install dj-database-url
 ```
+### django-extensions
+
+- **URL**: https://github.com/django-extensions/django-extensions
+- **PyPI**: `django-extensions`
+- **Key features**: `shell_plus` (auto-import all models), `runserver_plus` (debug server with Werkzeug), plus 50+ management commands for debugging and development
+
+### whitenoise
+- **URL**: https://github.com/evansd/whitenoise
+- **PyPI**: `whitenoise`
+- **Key features**: Simplified static file serving for Django apps (no need for separate web server in development, works with Gunicorn/uWSGI)
+
+### django-environ
+- **URL**: https://github.com/joke2k/django-environ
+- **PyPI**: `django-environ`
+- **Key features**: 12-factor environment variables management, companion to dj-database-url for parsing DATABASE_URL and other settings from env vars
+
+### Additional Ecosystem Libraries
+
+- **django-crispy-forms** (https://github.com/django-crispy-forms/django-crispy-forms) - Elegant form rendering with template packs
+- **django-widget-tweaks** (https://github.com/jazzband/django-widget-tweaks) - Render form widgets as template tags (modify attrs in templates)
+- **django-taggit** (https://github.com/jazzband/django-taggit) - Simple tagging for Django models
+- **django-model-utils** (https://github.com/jazzband/django-model-utils) - Django model mixins and utilities (TimeStampedModel, StatusField, etc.)
+- **django-polymorphic** (https://github.com/django-commons/django-polymorphic) - Transparent polymorphic models (better than default Django admin)
 
 ### awesome-django
-- **URL**: https://github.com/wsvincent/awesome-django
-- **PyPI**: N/A
-
-A curated list of awesome Django packages, tools, and resources. Useful for discovering Django ecosystem packages. Maintained by Will Vincent and Jeff Triplett (~11.2k stars), organized into third-party packages (admin, APIs, caching, task queues, testing, etc.), Python packages, resources (tutorials, books, conferences, podcasts), hosting, and DRF/Wagtail sections.
-
-```bash
-# Not a library — browse at https://github.com/wsvincent/awesome-django
-```
 
 ## References
 

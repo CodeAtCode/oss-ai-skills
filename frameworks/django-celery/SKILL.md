@@ -3,7 +3,7 @@ name: django-celery
 description: "Django Celery integration - distributed tasks, periodic scheduling with django-celery-beat, monitoring, best practices"
 metadata:
   author: mte90
-  version: 1.0.0
+  version: 1.1.0
   tags:
     - python
     - django
@@ -604,6 +604,36 @@ class TaskTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['test@example.com'])
 ```
+
+---
+
+## References
+
+- **Celery Docs**: https://docs.celeryq.dev/en/stable/
+---
+
+## Ecosystem
+
+### Monitoring
+
+- **flower** (https://github.com/mher/flower) — Web-based Celery cluster admin and monitoring. Real-time task progress, worker stats, task history, broker metrics.
+- **celery-exporter** (https://github.com/danihodovic/celery-exporter) — Prometheus metrics exporter for Celery. Exposes task durations, queue lengths, worker status for Grafana dashboards.
+
+### Results & Backends
+
+- **django-celery-results** (https://github.com/celery/django-celery-results) — Django ORM-based result backend. Store task results in Django database instead of Redis/RabbitMQ.
+
+### Cache/Broker Companion
+
+- **django-redis** (https://github.com/jazzband/django-redis) — Full-featured Redis cache backend for Django. Can be used as Celery broker companion for unified Redis infrastructure.
+
+### Alternatives
+
+For lighter-weight task queues or different use cases:
+- **django-q2** (https://github.com/django-q2/django-q2) — Simple Django task queue with own scheduler
+- **django-dramatiq** (https://github.com/Bogdanp/django_dramatiq) — Dramatiq integration for Django (alternative Celery-style queue)
+- **huey** (https://github.com/coleifer/huey) — Lightweight task queue with Django integration
+- **django-tasks** (https://github.com/realOrangeOne/django-tasks) — Reference implementation for background workers (Django DEP 14)
 
 ---
 
