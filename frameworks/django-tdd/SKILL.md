@@ -806,3 +806,40 @@ open htmlcov/index.html
 | `mail.outbox` | Check sent emails |
 
 Remember: Tests are documentation. Good tests explain how your code should work. Keep them simple, readable, and maintainable.
+
+
+## Testing Pitfalls
+
+### Mocking `connections` imported at module scope
+
+If the code under test does `from django.db import connections` at the top of the file, patch `module_under_test.connections`, not `django.db.connections`. The module bound its own reference at import time and won't see the global patch.
+
+### `patch.object` cannot mock dunders on instances
+
+`patch.object(connections, "__getitem__", ...)` silently fails. Mock at the class level (`patch.object(type(connections), "__getitem__", ...)`) or substitute a wrapper object that defines `__getitem__`.
+
+### Always use timezone-aware datetimes
+
+Naive datetimes trigger `RuntimeWarning` and, when `filterwarnings = ["error"]` is set, fail the suite. Use `django.utils.timezone.now()` or `timezone.make_aware(datetime(...))`.
+
+```python
+from django.utils import timezone
+
+# WRONG
+started_at = datetime(2025, 1, 1, 12, 0, 0)
+
+# RIGHT
+started_at = timezone.now()
+started_at = timezone.make_aware(datetime(2025, 1, 1, 12, 0, 0))
+```
+
+### `auto_now_add` in tests
+
+A `DateTimeField(auto_now_add=True)` ignores values passed to the constructor. Set the value after `save()`, not before:
+
+```python
+invoice = Invoice(customer=c)
+invoice.save()
+invoice.issued_at = some_time
+invoice.save()
+```

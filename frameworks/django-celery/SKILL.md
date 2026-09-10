@@ -635,6 +635,75 @@ For lighter-weight task queues or different use cases:
 - **huey** (https://github.com/coleifer/huey) — Lightweight task queue with Django integration
 - **django-tasks** (https://github.com/realOrangeOne/django-tasks) — Reference implementation for background workers (Django DEP 14)
 
+## System Cron vs Celery-Beat: Choosing a Scheduler
+
+For a single-server Django deployment, system cron + a management command is often simpler and more reliable than Celery + Redis + `django-celery-beat`. Use Celery only when the project already needs a task queue for async work, fan-out, or retries.
+
+| Factor | System cron + `manage.py` command | Celery + `django-celery-beat` |
+|--------|-----------------------------------|-------------------------------|
+| Infrastructure | None (cron daemon) | Redis/RabbitMQ broker, worker process, beat process |
+| Scheduling | OS crontab, one line per job | Database-backed `PeriodicTask`, admin-editable |
+| Retries | Manual in the command | Native Celery retries with backoff |
+| Observability | `JobLog` table + log files | Flower, Sentry, task state in DB |
+| Concurrency | Sequential (or `&` between jobs) | Worker pool, task-level concurrency |
+| Deployment | Add crontab entry per server | Deploy worker + beat as systemd services |
+| Failure mode | One job failing doesn't block others | Broker outage stops all tasks |
+| Best for | Nightly billing, daily sweep, imports | Real-time processing, fan-out, long-running jobs |
+
+**Decision rule:** if the only async work is "run X daily/hourly," use system cron. If the project needs retries, fan-out, or sub-minute scheduling, introduce Celery.
+
+### System cron pattern
+
+```bash
+# /etc/cron.d/regolo-billing
+0 2 * * * regolo /app/.venv/bin/python /app/manage.py daily_processing >> /var/log/regolo/daily.log 2>&1
+```
+
+The management command wraps each item in a savepoint (see Batch Processing below) so one failure doesn't abort the run.
+
+### Celery-Beat pattern
+
+```python
+# settings.py
+CELERY_BEAT_SCHEDULE = {
+    "daily-processing": {
+        "task": "billing.tasks.daily_processing",
+        "schedule": crontab(hour=2, minute=0),
+    },
+}
+```
+
+## Batch Processing in Tasks
+
+A Celery task (or management command) that processes many items must wrap each item in a savepoint so one failure doesn't poison the batch. Without per-item `transaction.atomic`, the first `TransactionManagementError` rolls back everything and the task dies without processing remaining items.
+
+```python
+from celery import shared_task
+from django.db import transaction
+from django.utils import timezone
+
+@shared_task(bind=True, max_retries=3)
+def daily_processing(self):
+    for customer in Customer.objects.filter(active=True):
+        try:
+            with transaction.atomic():
+                process_customer(customer)
+        except Exception as exc:
+            JobLog.objects.create(
+                customer=customer,
+                status="failed",
+                error=str(exc),
+                started_at=timezone.now(),
+            )
+            # continue to next customer — do not re-raise inside the loop
+```
+
+Key rules:
+- `transaction.atomic()` creates a savepoint; a failure rolls back only the current item.
+- Log inside the `except`, don't re-raise, so the loop continues.
+- `JobLog.started_at` has no default — always pass `timezone.now()`.
+- For Celery tasks, use `bind=True` and `self.retry(exc=exc)` for transient failures (broker, DB connection), not for per-item business errors.
+
 ---
 
 ## References

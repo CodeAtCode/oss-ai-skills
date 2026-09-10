@@ -740,6 +740,62 @@ Django admin extension that adds confirmation pages for admin actions: each acti
 pip install django-admin-action-forms
 ```
 Add `'django_admin_action_forms'` to `INSTALLED_APPS`.
+
+## Django 6.x `get_action_choices` Compatibility
+
+`django-unfold` 0.105.0's `ModelAdmin.get_action_choices(self, request, default_choices=BLANK_CHOICE_DASH)` does not accept the `action_location` argument that Django 6.x requires, triggering a `DeprecationWarning` that fails the test suite when warnings are treated as errors.
+
+Since this is an upstream bug, the fix is a monkey-patch in an `AppConfig.ready()` hook:
+
+```python
+# customers/apps.py
+from django.apps import AppConfig
+
+class CustomersConfig(AppConfig):
+    name = "customers"
+
+    def ready(self):
+        from unfold.admin import ModelAdmin
+        original = ModelAdmin.get_action_choices
+
+        def patched(self, request, default_choices=None, action_location=None):
+            return original(self, request, default_choices)
+
+        ModelAdmin.get_action_choices = patched
+```
+
+This runs once at Django startup and silences the warning for the entire process. Remove the patch when `django-unfold` ships a version that accepts `action_location` natively.
+
+## INSTALLED_APPS Ordering
+
+`django-unfold` must appear in `INSTALLED_APPS` **before** `django.contrib.admin` so its templates and static files take precedence:
+
+```python
+INSTALLED_APPS = [
+    # ...
+    "unfold",            # before admin
+    "django.contrib.admin",
+    # ...
+]
+```
+
+If the order is reversed, the admin renders with the default Django admin theme and Unfold's customizations are silently ignored.
+
+## Admin URL Precedence and Action Payload
+
+These patterns apply to Unfold and standard Django admin alike, but surface frequently when customizing Unfold views:
+
+1. **Custom URLs before `super().get_urls()`** — A custom Unfold view like a voucher-creation wizard must be registered before the default changelist pattern, or `<path:object_id>/` swallows it.
+
+2. **Action POST payload** — when triggering a custom action from an Unfold view via JavaScript, the payload must include `action` (the method name) and `_selected_action` (list of IDs). Swapping them silently no-ops the action.
+
+3. **Redirects** — `UnfoldAdminSite` has no `urls_url` attribute. Use `django.urls.reverse()` to build redirect targets from custom Unfold views.
+
+```python
+from django.urls import reverse
+return redirect(reverse("admin:customers_customer_changelist"))
+```
+
 ## References
 
 - **GitHub**: https://github.com/unfoldadmin/django-unfold

@@ -549,6 +549,32 @@ Adds drag-and-drop ordering support for model inlines and related objects in the
 
 Adds pagination support for inline formsets in the admin. Particularly relevant when dealing with large numbers of inline objects, addressing challenges with the `save_formset` patterns discussed earlier.
 
+## Custom Admin URLs Must Precede `super().get_urls()`
+
+Django matches URL patterns in order. If `super().get_urls()` is called first, the default change-view pattern (`<path:object_id>/`) swallows custom paths.
+
+```python
+class CustomerAdmin(admin.ModelAdmin):
+    def get_urls(self):
+        urls = super().get_urls()
+        my_urls = [
+            path("import-csv/", self.admin_site.admin_view(self.import_csv), name="import_csv"),
+        ]
+        return my_urls + urls  # custom URLs FIRST
+```
+
+## Admin Action POST Payload
+
+When invoking a custom action via POST (e.g., from JavaScript or `django-webtest`), the payload must include:
+
+| Field | Value |
+|-------|-------|
+| `action` | the action method name (e.g., `"block_customers"`) |
+| `_selected_action` | list of selected object IDs |
+| `post` | `"yes"` (or `"on"`) to confirm |
+
+Swapping `action` and `_selected_action` prevents the action from running and can break session persistence.
+
 ---
 
 ## References
