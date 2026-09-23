@@ -1,9 +1,9 @@
 ---
 name: django-admin
-description: "Django Admin pitfalls - save_formset, get_search_results, get_formset, admin queryset optimization, db_index"
+description: Use when customizing Django Admin - save_formset, get_search_results, formsets, queryset optimization, db_index, custom URLs
 metadata:
   author: mte90
-  version: 1.1.0
+  version: 1.1.1
   tags:
     - python
     - django

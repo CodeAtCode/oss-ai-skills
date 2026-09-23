@@ -1,9 +1,9 @@
 ---
 name: redis
-description: "Redis v8.0 - in-memory database, caching, pub/sub, sessions, rate limiting, data structures with RESP3 default and asyncio module"
+description: Use when working with Redis - in-memory database, caching, pub/sub, sessions, rate limiting, RESP3, asyncio, Redis Stack
 metadata:
   author: mte90
-  version: 2.0.0
+  version: 2.0.1
   tags:
     - redis
     - database

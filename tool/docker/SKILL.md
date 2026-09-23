@@ -1,9 +1,9 @@
 ---
 name: docker
-description: "Docker - containers, Dockerfile, docker-compose, multi-stage builds, production, CI/CD"
+description: Use when working with Docker containers - Dockerfile, docker-compose, BuildKit, multi-stage builds, production, CI/CD
 metadata:
   author: mte90
-  version: 1.0.0
+  version: 1.0.1
   tags:
     - docker
     - docker-compose

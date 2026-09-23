@@ -1,9 +1,9 @@
 ---
 name: django-transaction
-description: "Django transactions and concurrency - atomic, select_for_update, on_commit, update_or_create races, M2M ordering"
+description: Use when handling Django transactions and concurrency - atomic, select_for_update, on_commit, upserts, M2M ordering
 metadata:
   author: mte90
-  version: 1.0.0
+  version: 1.0.1
   tags:
     - python
     - django

@@ -1,9 +1,9 @@
 ---
 name: ast-grep
-description: "ast-grep - Fast structural code search, linting, and rewriting CLI tool"
+description: Use when doing structural code search and rewriting - ast-grep linting, refactoring, multi-language patterns
 metadata:
   author: mte90
-  version: 1.0.0
+  version: 1.0.1
   tags:
     - ast-grep
     - code-search
