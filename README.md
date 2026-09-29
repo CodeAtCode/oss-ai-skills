@@ -75,7 +75,7 @@ This repository provides reusable skill definitions that can be loaded into AI c
 
 | Skill | Description | Lines | Tags |
 |-------|-------------|-------|------|
-| [Rust Common Pitfalls](languages/rust-common-pitfalls/SKILL.md) | Use when fixing Rust compiler errors and pitfalls - E0382/E0502/E0716 borrow-checker and move errors, test organization, coverage enforcement, thiserror design, panic elimination, or module splitting | 1,432 | rust, pitfalls, best-practices, common-errors, testing |
+| [Rust Core](languages/rust-core/SKILL.md) | Use when writing, reviewing, or refactoring Rust code - ownership and borrowing, error handling, async patterns, API design, memory optimization, performance tuning, testing, or common anti-patterns (Rust 1.80+, Edition 2024) | 26,416 | rust, core, ownership, error-handling, async, performance, testing |
 
 ## Skill Format
 
