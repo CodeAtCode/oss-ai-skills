@@ -180,6 +180,102 @@ function isStreamingFailure(errorName: string, errorMessage: string): boolean {
 }
 ```
 
+---
+
+## Silent Dead-Stream Detection
+
+*Pattern for detecting assistant messages that produced no visible output.*
+
+Some sessions end with `finish: "unknown"` but zero text parts — the model only produced reasoning. Detect and handle these:
+
+```typescript
+const silentDeadStreamMinTokens: number =
+  (options?.silentDeadStreamMinTokens as number) ?? DEFAULT_SILENT_DEAD_STREAM_MIN_TOKENS // e.g., 200
+
+function getLastSilentDeadStream(messages: Message[]): { finish: string; outputTokens: number } | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (msg.role === "assistant" && msg.finish && msg.finish !== "stop") {
+      const hasText = msg.parts?.some(p => p.type === "text" && p.text?.trim())
+      if (!hasText) {
+        // Dead stream: non-terminal finish with no text
+        const outputTokens = countTokensFromParts(msg.parts || [])
+        return { finish: msg.finish, outputTokens }
+      }
+    }
+  }
+  return null
+}
+
+// In session.idle handler
+const dead = getLastSilentDeadStream(await getSessionMessages(sid))
+if (dead && dead.outputTokens >= silentDeadStreamMinTokens) {
+  // Silent dead stream detected — trigger recovery
+  w.pendingRecovery = true
+  w.pendingRecoveryReason = `silent-${dead.finish}`
+  w.pendingRecoveryAt = Date.now()
+  await log("info", `${short(sid)} - silent dead stream (${dead.finish}, ${dead.outputTokens} tokens)`)
+}
+```
+
+---
+
+## Test Timing Patterns
+
+*Optimize test suite runtime by replacing long fixed waits with injectable delays.*
+
+### Replace long warmup waits
+
+In most tests, replace `wait(3500)` → `wait(500)` and use injectable config:
+
+```typescript
+const toolTextCheckDelayMs: number =
+  (options?.toolTextCheckDelayMs as number) ?? DEFAULT_TOOL_TEXT_CHECK_DELAY_MS
+const minActivityGapMs: number =
+  (options?.minActivityGapMs as number) ?? DEFAULT_MIN_ACTIVITY_GAP_MS
+const warmupMs: number =
+  (options?.warmupMs as number) ?? DEFAULT_WARMUP_MS
+```
+
+Test config:
+```typescript
+const testOptions = {
+  toolTextCheckDelayMs: 10,
+  minActivityGapMs: 0,
+  warmupMs: 0,  // Disable warmup unless testing warmup behavior
+}
+
+const hooks = await MyPlugin(ctx, testOptions)
+```
+
+**Real result:** Suite runtime 104s → 23s
+
+**Exception:** Keep real `warmupMs: 60000` ONLY in tests that verify warmup behavior itself.
+
+---
+
+## TypeScript vs SDK Types in Tests
+
+*Pattern for handling stricter SDK types vs test mocks.*
+
+The SDK `Event` union is stricter than test mocks. Use non-null assertions and `as any` on event literals:
+
+```typescript
+// Test mocks
+hooks.event!()({ event: { type: "session.status", sessionID: "s1", properties: { status: { type: "idle" } } } })
+hooks.config!()({ /* config shape */ })
+
+// Event helpers
+const statusEvent = makeStatusEvent("idle", "s1") as any
+const errorEvent = makeErrorEvent("MessageAbortedError", "aborted") as any
+```
+
+**Verify with:** `bun x tsc --noEmit -p tsconfig.json`
+
+**Rule:** Never duplicate interface definitions between `src` and test files — import from SDK or shared test-utils.
+
+---
+
 ### Active-tool safety guard
 
 Never abort a session that has a tool running. Check both the in-flight counter (from hooks) and the SDK status:

@@ -44,13 +44,13 @@ OpenCode resolves plugins from **two** places. Updates must touch both or you ge
 | `~/.cache/opencode/packages/<name>@<ver>/` | Download cache. Contains `node_modules/`, `dist/`, `package-lock.json`. |
 | `~/.config/opencode/node_modules/<name>/` | Runtime resolution via `bun.lock` + `package.json` in `~/.config/opencode/`. |
 
-The `~/.config/opencode/package.json` caret-pins versions (e.g. `"opencode-auto-resume": "^1.0.15"`), and `bun.lock` locks resolution. To force a specific version: edit `package.json`, delete `bun.lock`, run `bun install` in `~/.config/opencode/`.
+The `~/.config/opencode/package.json` caret-pins versions (e.g. `"my-opencode-plugin": "^1.0.15"`), and `bun.lock` locks resolution. To force a specific version: edit `package.json`, delete `bun.lock`, run `bun install` in `~/.config/opencode/`.
 
 To clear all cached versions and force a fresh download:
 
 ```bash
-rm -rf ~/.cache/opencode/packages/opencode-auto-resume@*
-rm -rf ~/.local/share/reflex/bun/install/cache/opencode-auto-resume@*
+rm -rf ~/.cache/opencode/packages/my-opencode-plugin@*
+rm -rf ~/.local/share/reflex/bun/install/cache/my-opencode-plugin@*
 cd ~/.config/opencode && bun install
 ```
 

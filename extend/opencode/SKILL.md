@@ -1,9 +1,9 @@
 ---
 name: opencode
-description: Use when developing plugins, tools, and extensions for the OpenCode agent - plugin contract and crash-prevention rules, ctx and event APIs, subagent lifecycle, MCP integration, SDK usage, REST API, testing, or publishing to npm
+description: Use when developing plugins, tools, and extensions for OpenCode v1 - plugin contract, crash-prevention rules, ctx/event APIs, subagent lifecycle (abort races, compaction, orphan detection), MCP integration, testing patterns, or publishing to npm
 metadata:
   author: mte90
-  version: 3.0.0
+  version: 3.2.0
   tags:
     - opencode
     - plugin
@@ -16,9 +16,9 @@ metadata:
 
 Complete, field-tested guide for developing plugins for OpenCode (v1.18+) AI coding agent.
 
-> **Every rule, signature, and pattern below was verified against a real plugin
-> (`opencode-auto-resume`) that went through 5 versions and 3 distinct crash
-> classes in production.** The "Hard-won rules" sections are non-negotiable —
+> **Every rule, signature, and pattern below was verified against a production
+> plugin that went through 5 versions and 3 distinct crash classes.** The "Hard-won
+> rules" sections are non-negotiable —
 > violating them silently breaks the host.
 
 ---
@@ -227,6 +227,40 @@ if (typeof sid !== "string" || !sid.startsWith("ses_")) return
 await ctx.client.session.prompt({ path: { id: sid }, body: { ... } })
 ```
 
+### Rule 6 — ESC/abort race: set `pluginAbortInFlight` before calling `session.abort()`
+
+The `session.status` event with `"interrupted"` can arrive **BEFORE** `session.error` with `MessageAbortedError`. If you abort during this window, check the flag before treating it as user-cancel:
+
+```typescript
+// In ensureWatch
+w.pluginAbortInFlight = false
+w.pluginAbortAt = 0
+
+// Before aborting
+w.pluginAbortInFlight = true
+w.pluginAbortAt = Date.now()
+try {
+  await ctx.client.session.abort({ path: { id: sid } })
+} finally {
+  w.pluginAbortInFlight = false
+  w.pluginAbortAt = 0
+}
+
+// In session.error handler
+case "session.error": {
+  if (props?.error?.name === "MessageAbortedError") {
+    if (w.pluginAbortInFlight && Date.now() - w.pluginAbortAt < 1000) {
+      // Plugin-initiated abort, not user ESC
+    } else {
+      w.userCancelled = true
+    }
+  }
+  break
+}
+```
+
+See [`references/subagents-tools.md`](references/subagents-tools.md) for the full pattern.
+
 ---
 
 ## The Context API (`ctx`)
@@ -363,7 +397,7 @@ Check:
 ### Verify which version loaded at runtime
 
 ```bash
-grep "opencode-auto-resume\|my-plugin" ~/.local/share/opencode/log/opencode.log | tail -5
+grep "my-plugin" ~/.local/share/opencode/log/opencode.log | tail -5
 # Look for: path=my-plugin@X.Y.Z
 ```
 
