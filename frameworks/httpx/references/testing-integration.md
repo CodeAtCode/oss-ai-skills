@@ -1,47 +1,8 @@
-# Testing & Integration
+# Testing & Framework Integration
 
 This file is loaded on demand from ../SKILL.md.
 
-## Mocking with httpx-mock
-
-```python
-import httpx
-import pytest
-from httpx import MockTransport
-
-def test_simple_mock():
-    """Simple mock without external requests."""
-    transport = MockTransport(lambda request: httpx.Response(200, json={"key": "value"}))
-    
-    with httpx.Client(transport=transport) as client:
-        response = client.get("https://example.com/api")
-        assert response.status_code == 200
-        assert response.json() == {"key": "value"}
-
-def test_mock_status():
-    """Mock error responses."""
-    transport = MockTransport(lambda request: httpx.Response(404))
-    
-    with httpx.Client(transport=transport) as client:
-        response = client.get("https://example.com/not-found")
-        assert response.status_code == 404
-
-def test_mock_redirect():
-    """Mock redirects."""
-    transport = MockTransport(
-        lambda request: (
-            httpx.Response(301, headers={"location": "https://example.com/new"})
-            if request.url.path == "/old"
-            else httpx.Response(200)
-        )
-    )
-    
-    with httpx.Client(transport=transport, follow_redirects=True) as client:
-        response = client.get("https://example.com/old")
-        assert response.status_code == 200
-```
-
-## Using respx
+## respx Deep Dive
 
 ```python
 import httpx
@@ -49,119 +10,175 @@ import respx
 import pytest
 
 @respx.mock
-def test_with_respx():
-    """Mock with respx library."""
-    route = respx.get("https://example.com/api").mock(
-        return_value=httpx.Response(200, json={"data": "test"})
+def test_assert_request_properties():
+    """Assert method, URL, headers, and body."""
+    route = respx.post("https://api.example.com/users").mock(
+        return_value=httpx.Response(201, json={"id": 123})
     )
-    
-    response = httpx.get("https://example.com/api")
-    assert response.json() == {"data": "test"}
-    
-    # Check call info
+
+    client = httpx.Client()
+    response = client.post(
+        "https://api.example.com/users",
+        json={"name": "Alice"},
+        headers={"X-Request-ID": "abc-123"}
+    )
+
     assert route.called
-    assert route.call_count == 1
+    request = route.calls[0].request
+    
+    # Assert request properties
+    assert request.method == b"POST"
+    assert request.headers.get(b"x-request-id") == b"abc-123"
+    
+    # Assert request body
+    import json
+    body = json.loads(request.content)
+    assert body == {"name": "Alice"}
+```
+
+**Pattern matching:**
+
+```python
+import respx
+import httpx
 
 @respx.mock
-def test_mock_side_effect():
-    """Mock with side effects."""
+def test_query_param_matching():
+    """Match on query parameters."""
+    route = respx.get("https://api.example.com/search").params(
+        q="python", page=1
+    ).mock(return_value=httpx.Response(200))
+    
+    response = httpx.get("https://api.example.com/search", params={"q": "python", "page": 1})
+    assert route.called
+```
+
+**Side effects for stateful testing:**
+
+```python
+import respx
+import httpx
+
+@respx.mock
+def test_sequential_responses():
+    """Different responses for same endpoint."""
     call_count = 0
     
     def side_effect(request):
         nonlocal call_count
         call_count += 1
-        return httpx.Response(200, json={"count": call_count})
+        if call_count == 1:
+            return httpx.Response(503)  # First call fails
+        return httpx.Response(200, json={"data": "success"})
     
-    route = respx.get("https://example.com/counter").mock(side_effect=side_effect)
+    route = respx.get("https://api.example.com/data").mock(side_effect=side_effect)
     
-    # First call
-    r1 = httpx.get("https://example.com/counter")
-    assert r1.json() == {"count": 1}
+    # First call fails
+    response1 = httpx.get("https://api.example.com/data")
+    assert response1.status_code == 503
     
-    # Second call
-    r2 = httpx.get("https://example.com/counter")
-    assert r2.json() == {"count": 2}
-```
-
-## Async Testing
-
-```python
-import pytest
-import httpx
-from unittest.mock import AsyncMock, patch
-
-@pytest.mark.asyncio
-async def test_async_mock():
-    """Test async client with mock."""
-    transport = AsyncMock()
-    transport.handle_async_request = AsyncMock(
-        return_value=httpx.Response(200, json={"async": True})
-    )
-    
-    async with httpx.AsyncClient(transport=transport) as client:
-        response = await client.get("https://example.com/api")
-        assert response.json() == {"async": True}
-
-@pytest.mark.asyncio
-async def test_patch_async():
-    """Test with patch."""
-    with patch("httpx.AsyncClient") as mock_client:
-        mock_response = httpx.Response(200, text="mocked")
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-            return_value=mock_response
-        )
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get("https://example.com")
-            assert response.text == "mocked"
+    # Second call succeeds
+    response2 = httpx.get("https://api.example.com/data")
+    assert response2.status_code == 200
 ```
 
 ## FastAPI Integration
 
 ```python
-import httpx
 from fastapi import FastAPI, Depends
+import httpx
 
 app = FastAPI()
 
-# Dependency for HTTP client
-def get_http_client():
-    with httpx.Client() as client:
+# Dependency injection for httpx client
+def get_http_client() -> httpx.Client:
+    with httpx.Client(timeout=30.0) as client:
         yield client
 
 @app.get("/users/{user_id}")
-async def get_user(
-    user_id: int,
-    client: httpx.Client = Depends(get_http_client)
-):
+def get_user(user_id: int, client: httpx.Client = Depends(get_http_client)):
     response = client.get(f"https://api.example.com/users/{user_id}")
     return response.json()
+```
 
-# Async version
-@app.get("/posts/{post_id}")
-async def get_post(post_id: int):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.example.com/posts/{post_id}")
-        return response.json()
+**Testing FastAPI with httpx:**
+
+```python
+from fastapi.testclient import TestClient
+import httpx
+import respx
+
+def test_fastapi_endpoint(respx_mock):
+    """Test FastAPI endpoint that calls external API."""
+    # Mock external API call
+    respx_mock.get("https://api.example.com/users/1").mock(
+        return_value=httpx.Response(200, json={"id": 1, "name": "Alice"})
+    )
+    
+    from main import app
+    client = TestClient(app)
+    
+    response = client.get("/users/1")
+    assert response.status_code == 200
+    assert response.json() == {"id": 1, "name": "Alice"}
 ```
 
 ## Django Integration
 
 ```python
-import httpx
 from django.http import JsonResponse
+import httpx
 
 def external_api_view(request):
-    with httpx.Client() as client:
+    with httpx.Client(timeout=30.0) as client:
         response = client.get(
             "https://api.example.com/data",
             headers={"Authorization": f"Bearer {request.user.token}"}
         )
+        response.raise_for_status()
         return JsonResponse(response.json())
+```
 
-# With timeout
-def api_with_timeout(request):
-    with httpx.Client(timeout=30.0) as client:
-        response = client.get("https://api.example.com/data")
+**Async Django views:**
+
+```python
+from django.http import JsonResponse
+import httpx
+import asyncio
+
+async def async_external_api_view(request):
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get("https://api.example.com/data")
+        response.raise_for_status()
         return JsonResponse(response.json())
+```
+
+## Testing Retry Logic
+
+```python
+import httpx
+from httpx import MockTransport
+import time
+
+def test_retry_with_mock_transport():
+    """Test retry behavior without actual network delays."""
+    call_count = 0
+    
+    def flaky_transport(request):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise httpx.ConnectTimeout("Simulated timeout", request=request)
+        return httpx.Response(200, json={"success": True})
+    
+    transport = MockTransport(flaky_transport)
+    client = httpx.Client(transport=transport)
+    
+    # Your retry logic
+    try:
+        response = client.get("https://example.com")
+        assert response.json() == {"success": True}
+        assert call_count == 3  # Verified retry count
+    except httpx.ConnectTimeout:
+        pytest.fail("Retry logic should have handled this")
 ```

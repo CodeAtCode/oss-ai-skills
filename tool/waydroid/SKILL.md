@@ -30,6 +30,47 @@ Key features:
 - **LineageOS-based**: Custom Android system images
 - **binderfs**: Android IPC mechanism for container-host communication
 
+## When Not to Use Waydroid
+
+| Use Case | Better Alternative | Trade-off |
+|----------|-------------------|------------|
+| Need full Google Play Services fidelity | AVD (Android Virtual Device) with Google APIs image | AVD has higher overhead but complete Play Services compatibility |
+| Testing hardware/GPU behavior | Physical Android device | Only real hardware reproduces device-specific GPU bugs |
+| Running 5+ concurrent devices | Cloud device lab (Firebase Test Lab, AWS Device Farm) | Cost increases with scale, but built-in device diversity |
+| Headless CI runners without display | Genymotion Cloud or Android CI containers | These provide headless Android runtime without display requirements |
+| Building apps only (no runtime) | Android SDK command-line tools + Gradle | No emulator overhead when you only need to compile |
+
+## CLI Quick Reference
+
+| Command | Purpose |
+|---------|----------|
+| `waydroid session start` | Start user session (after systemd container) |
+| `waydroid session stop` | Stop user session, keep container running |
+| `sudo systemctl start waydroid-container.service` | Start the Waydroid container (systemd) |
+| `sudo systemctl stop waydroid-container.service` | Stop the container completely |
+| `adb connect 192.168.250.1:5555` | Connect ADB over Waydroid's network socket |
+| `waydroid app install <apk>` | Install an APK from host filesystem |
+| `waydroid app launch <package>` | Launch an installed Android app |
+| `waydroid screenshot` | Capture current screen to host |
+| `waydroid pull /sdcard/file` | Pull file from Android to host |
+| `sudo waydroid session stop && sudo rm -rf /var/lib/waydroid && sudo waydroid init` | Pull/reset image to restore state |
+
+> **Note**: ADB over socket requires the container to be running. For deeper troubleshooting, see [references/desktop-troubleshooting.md](references/desktop-troubleshooting.md).
+
+## First 10 Minutes: Troubleshooting Path
+
+When something doesn't work, follow this symptom → check order:
+
+| Symptom | Check | Depth |
+|---------|-------|--------|
+| App won't install | Verify image ABI: `waydroid shell getprop ro.product.cpu.abi` — x86_64 vs arm64-v8a mismatch requires different image | [references/gpu-networking.md](references/gpu-networking.md#images) |
+| No network in Android | `ip addr show waydroid0` — interface should exist; `waydroid shell ping google.com` — tests DNS | [references/gpu-networking.md](references/gpu-networking.md#networking) |
+| Audio not working | `waydroid shell media list-sinks` — verify audio sinks; try `waydroid prop set audio.oss 1` | [references/desktop-troubleshooting.md](references/desktop-troubleshooting.md#common-issues) |
+| No hardware acceleration | `waydroid shell dumpsys SurfaceFlinger` — check GPU renderer; verify `virgl` support | [references/gpu-networking.md](references/gpu-networking.md#gpu-support) |
+| Container won't start | `lsmod | grep binder` — binder module loaded?; `waydroid log` — check init errors | [references/desktop-troubleshooting.md](references/desktop-troubleshooting.md#common-issues) |
+
+> **Most common fix**: `sudo systemctl restart waydroid-container.service && waydroid session stop && waydroid session start`
+
 ## Installation
 
 ### Ubuntu/Debian
@@ -111,7 +152,7 @@ sudo waydroid container start
 waydroid session start
 ```
 
-## CLI Commands
+## Common Commands
 
 ### App Management
 
@@ -156,13 +197,6 @@ waydroid prop get ro.product.model
 waydroid session stop
 sudo waydroid container stop
 sudo waydroid container restart
-```
-
-### Configuration
-
-```bash
-waydroid config set <property> <value>
-waydroid config set ro.orientation.portrait 1
 ```
 
 ## Deep Dives

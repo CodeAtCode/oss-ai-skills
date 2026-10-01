@@ -17,518 +17,464 @@ metadata:
 
 Asynchronous HTTP client/server framework for Python.
 
-## Overview
+## When to Use aiohttp
 
-aiohttp is a powerful asynchronous HTTP client and server framework built on asyncio. It provides both a web server for building web applications and a client for making HTTP requests.
+**Choose aiohttp when:**
+- Building async Python HTTP servers with fine-grained control over routing and middleware
+- Need both client and server in one framework with WebSocket/SSE support
+- Streaming responses or large file uploads/downloads are required
 
-**Key Features:**
-- Async web server and client
-- WebSocket support (client and server)
-- Server-Sent Events (SSE)
-- Middleware system
-- Request/response streaming
-- Cookie handling
-- File uploads
-- Web server routing
-- Connection keepalive
-- Support for HTTP/1.1 and HTTP/2
+**Consider alternatives:**
+- **fastapi** — When you want automatic OpenAPI docs, Pydantic validation built-in, and simpler syntax
+- **httpx** — When you need a modern async HTTP client with HTTP/2 support (better than aiohttp's)
+- **Flask/FastAPI + httpx** — For sync codebases (aiohttp is purely async)
 
-### Installation
-
-```bash
-# Basic installation
-pip install aiohttp
-
-# With development dependencies
-pip install aiohttp[dev]
-
-# With speedups (aiodns, Brotli)
-pip install aiohttp[speedups]
-
-# With all extras
-pip install aiohttp[cryptography, speedups]
-```
-
-## See Also
-
-- **fastapi** — Modern Python web framework with automatic OpenAPI and Pydantic integration
-- **httpx** — Modern async HTTP client with sync/async API and HTTP/2 support
-- **pydantic** — Data validation using Python type hints with automatic JSON validation
-- **uvicorn** — ASGI server for running aiohttp and other async frameworks
-
-## Web Server
-
-### Basic Server
+## Quick Start: Minimal Server
 
 ```python
 from aiohttp import web
 
-async def handle_request(request):
-    """Simple request handler."""
-    return web.Response(text="Hello, World!")
+async def health_check(request):
+    return web.json_response({"status": "ok"})
+
+async def create_user(request):
+    data = await request.json()
+    # Validate with Pydantic or manual checks
+    return web.json_response({"id": 1, "username": data["username"]}, status=201)
 
 app = web.Application()
-app.router.add_get('/', handle_handler)
+app.router.add_get('/health', health_check)
+app.router.add_post('/users', create_user)
 
 if __name__ == '__main__':
     web.run_app(app, host='127.0.0.1', port=8080)
 ```
 
-### Running Server
+## Server-Side Patterns
+
+### Application Setup with Startup/Cleanup Hooks
+
+Use `app.on_startup` and `app.on_cleanup` for resource lifecycle:
 
 ```python
 from aiohttp import web
+import asyncpg
 
-# Basic run
-app = web.Application()
-web.run_app(app)
+async def init_db(app):
+    """Create database connection pool."""
+    app['db_pool'] = await asyncpg.create_pool(
+        host='localhost',
+        port=5432,
+        database='app_db'
+    )
 
-# With configuration
-web.run_app(
-    app,
-    host='0.0.0.0',
-    port=8080,
-    access_log=logger,
-    shutdown_timeout=60,
-    ssl_context=ssl_context,
-    print=lambda x: print(x.strip())
-)
-```
-
-### Application Factory
-
-```python
-from aiohttp import web
-
-def create_app():
-    """Application factory pattern."""
-    app = web.Application()
-    app.middlewares.append(security_middleware)
-    app.router.add_get('/api', api_handler)
-    app['db'] = create_database_pool()
-    return app
-
-app = create_app()
-web.run_app(app)
-```
-
-## Routing
-
-### Basic Routes
-
-```python
-from aiohttp import web
+async def close_db(app):
+    """Close database connection pool."""
+    await app['db_pool'].close()
 
 app = web.Application()
-
-# Different HTTP methods
-async def get_handler(request):
-    return web.Response(text="GET request")
-
-async def post_handler(request):
-    data = await request.post()
-    return web.json_response({"received": dict(data)})
-
-app.router.add_get('/resource', get_handler)
-app.router.add_post('/resource', post_handler)
-
-# Or use @view decorator
-@web.view('/items')
-class ItemView(web.View):
-    async def get(self):
-        return web.json_response({"items": []})
-    
-    async def post(self):
-        data = await self.request.json()
-        return web.json_response({"created": data}, status=201)
+app.on_startup.append(init_db)
+app.on_cleanup.append(close_db)
+app.router.add_get('/users', list_users)
 ```
 
-### Variable Routes
+### Modern Lifespan Context (v3.9+)
+
+For cleaner startup/shutdown with context manager semantics:
 
 ```python
 from aiohttp import web
+
+async def lifespan_ctx(app):
+    """Lifespan context manager for resource management."""
+    # Startup
+    app['db_pool'] = await create_db_pool()
+    app['cache'] = await create_cache()
+    
+    yield  # App runs here
+    
+    # Cleanup
+    await app['cache'].close()
+    await app['db_pool'].close()
 
 app = web.Application()
-
-# Path parameters
-app.router.add_get('/users/{user_id}', get_user)
-app.router.add_post('/users/{user_id}/posts', create_post)
-
-async def get_user(request):
-    user_id = request.match_info['user_id']
-    return web.json_response({"id": user_id, "name": "John"})
-
-# With type conversion
-app.router.add_get('/users/{user_id:int}', get_user_by_id)
-app.router.add_get('/files/{filename:[a-zA-Z0-9_\\.]+}', get_file)
+app.router.add_get('/data', data_handler)
+# Run with: web.run_app(app, lifespan=lifespan_ctx)
 ```
 
-### Resource Routes
+### Middleware Patterns
+
+Middleware wraps request handling for cross-cutting concerns:
 
 ```python
 from aiohttp import web
+import time
+import logging
 
-app = web.Application()
-
-# Using resource
-resource = app.router.add_resource('/api', name='api')
-resource.add_get(get_handler)
-resource.add_post(post_handler)
-
-# Reverse URL generation
-url = app.router['api'].url_for()
-print(str(url))  # /api
-
-# With path parameters
-resource = app.router.add_resource('/users/{user_id}', name='user_detail')
-url = app.router['user_detail'].url_for(user_id=42)
-print(str(url))  # /users/42
-```
-
-## Request Handling
-
-### Reading Request Data
-
-```python
-from aiohttp import web
-
-async def handle_request(request):
-    # Query parameters
-    query = request.query  # ImmutableMultiDict
-    page = request.query.get('page', '1')
-    tags = request.query.getall('tag')
-    
-    # POST form data
-    data = await request.post()
-    username = data.get('username')
-    
-    # JSON body
-    json_data = await request.json()
-    
-    # Raw body
-    body = await request.read()
-    
-    # Headers
-    auth_header = request.headers.get('Authorization')
-    content_type = request.content_type
-    
-    # Remote info
-    remote = request.remote
-    host = request.host
-    
-    # Match info (path parameters)
-    user_id = request.match_info.get('user_id')
-    
-    return web.json_response({
-        "query": dict(query),
-        "data": json_data
-    })
-```
-
-### JSON Request Body Validation with Pydantic
-
-```python
-from aiohttp import web
-from pydantic import BaseModel, Field, ValidationError
-from typing import Optional
-import json
-
-class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
-    age: Optional[int] = Field(None, ge=0, le=150)
+logger = logging.getLogger(__name__)
 
 @web.middleware
-async def json_validation_middleware(request: web.Request, handler: web.Handler):
-    if request.method not in ('POST', 'PUT'):
-        return await handler(request)
-    
-    if request.content_type != 'application/json':
-        return await handler(request)
-    
+async def timing_middleware(request, handler):
+    """Track request duration."""
+    start = time.perf_counter()
     try:
-        body = await request.json()
-        validated_data = UserCreate(**body)
-        request._body = json.dumps(validated_data.dict()).encode()
-        request._parsed_json = validated_data
-    except (json.JSONDecodeError, ValidationError) as e:
+        response = await handler(request)
+        duration = time.perf_counter() - start
+        logger.info(f"{request.method} {request.path} {response.status} ({duration:.3f}s)")
+        return response
+    except Exception as e:
+        duration = time.perf_counter() - start
+        logger.error(f"{request.method} {request.path} failed after {duration:.3f}s: {e}")
+        raise
+
+@web.middleware
+async def auth_middleware(request, handler):
+    """Authentication middleware."""
+    public_paths = ['/health', '/public/']
+    if any(request.path.startswith(p) for p in public_paths):
+        return await handler(request)
+    
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not await validate_token(auth_header):
         return web.json_response(
-            {"error": "Invalid JSON", "details": str(e)},
-            status=400
+            {"error": "Unauthorized"},
+            status=401,
+            headers={'WWW-Authenticate': 'Bearer'}
         )
     
+    # Attach user info to request
+    request['user'] = await decode_token(auth_header)
     return await handler(request)
 
-app = web.Application(middlewares=[json_validation_middleware])
+# Combine middleware (applied left-to-right)
+app = web.Application(middlewares=[timing_middleware, auth_middleware])
 ```
 
-## Response
+### Response Choices
 
-### Basic Responses
+| Response Type | Use Case | Example |
+|---------------|----------|---------|
+| `web.Response(text=...)` | Plain text, HTML | `web.Response(text="OK", content_type="text/html")` |
+| `web.json_response(...)` | JSON bodies (auto-serializes) | `web.json_response({"key": "value"}, status=201)` |
+| `web.StreamResponse()` | Streaming large responses | See streaming section below |
+| `web.FileResponse()` | File downloads | `web.FileResponse('data.zip')` |
+| `web.HTTPFound()` | Redirects | `web.HTTPFound('/new-location')` |
+| HTTP exception classes | Error responses | `web.HTTPBadRequest()`, `web.HTTPNotFound()` |
 
+Manual status setting:
 ```python
-from aiohttp import web
+# Explicit status codes
+return web.json_response({"error": "not found"}, status=404)
+return web.Response(text="Created", status=201)
 
-async def handler(request):
-    # Text response
-    return web.Response(text="Hello")
-    
-    # With status code
-    return web.Response(text="Created", status=201)
-    
-    # JSON response
-    return web.json_response({"key": "value"})
-    
-    # With headers
-    return web.json_response(
-        {"data": "test"},
-        headers={"X-Custom": "value"}
-    )
-    
-    # Redirect
-    return web.HTTPFound('/new-location')
-    
-    # Error responses
-    return web.HTTPUnauthorized(
-        headers={'WWW-Authenticate': 'Basic realm="Login"'}
-    )
+# HTTP exception classes (automatic status)
+raise web.HTTPBadRequest(reason="Invalid input")
+return web.HTTPUnauthorized(headers={'WWW-Authenticate': 'Bearer'})
 ```
 
-### Response Types
+### Streaming Responses
 
-```python
-from aiohttp import web
-
-async def text_response(request):
-    return web.Response(text="Plain text", content_type="text/plain")
-
-async def json_response(request):
-    return web.json_response({"message": "JSON data"})
-
-async def bytes_response(request):
-    return web.Response(body=b"Binary data", content_type="application/octet-stream")
-
-async def stream_response(request):
-    """Streaming response for large files."""
-    response = web.StreamResponse()
-    response.headers['Content-Type'] = 'text/plain'
-    await response.prepare(request)
-    
-    for i in range(10):
-        await response.write(f"Line {i}\n".encode())
-        await response.drain()
-    
-    await response.write_eof()
-    return response
-
-async def file_response(request):
-    """Serve a file."""
-    response = web.FileResponse('path/to/file.txt')
-    response.headers['Content-Disposition'] = 'attachment; filename="file.txt"'
-    return response
-```
-
-### WebSocket Response
-
-```python
-from aiohttp import web, WSMsgType
-
-async def websocket_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-    
-    try:
-        async for msg in ws:
-            if msg.type == WSMsgType.TEXT:
-                await ws.send_str(f"Echo: {msg.data}")
-            elif msg.type == WSMsgType.BINARY:
-                await ws.send_bytes(msg.data)
-            elif msg.type == WSMsgType.ERROR:
-                print(f"WebSocket error: {ws.exception()}")
-    finally:
-        await ws.close()
-    
-    return ws
-
-app.router.add_get('/ws', websocket_handler)
-```
-
-### Server-Sent Events
+For large files or real-time data:
 
 ```python
 from aiohttp import web
 import asyncio
 
-async def sse_handler(request):
-    response = web.StreamResponse()
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['Connection'] = 'keep-alive'
-    
+async def stream_data(request):
+    """Server-Sent Events style streaming."""
+    response = web.StreamResponse(
+        status=200,
+        headers={
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        }
+    )
     await response.prepare(request)
     
     try:
         for i in range(10):
-            data = json.dumps({"count": i})
-            response.write(f"data: {data}\n\n".encode())
+            data = f"data: {{'count': {i}}}\n\n"
+            await response.write(data.encode())
             await response.drain()
             await asyncio.sleep(1)
     finally:
         await response.write_eof()
     
     return response
+
+async def stream_file(request):
+    """Stream large file in chunks."""
+    response = web.StreamResponse()
+    response.headers['Content-Type'] = 'application/octet-stream'
+    response.headers['Content-Length'] = str(file_size)
+    await response.prepare(request)
+    
+    async with aiofiles.open('large_file.bin', 'rb') as f:
+        while chunk := await f.read(8192):
+            await response.write(chunk)
+    
+    return response
 ```
 
-## Static Files
+## Client-Side Patterns
+
+### Basic Client Usage
 
 ```python
-from aiohttp import web
+import aiohttp
+import asyncio
 
-app = web.Application()
-
-# Simple static files
-app.router.add_static('/static/', 'path/to/static')
-
-# With options
-app.router.add_static(
-    '/static/',
-    'path/to/static',
-    show_index=True,
-    follow_symlinks=True,
-    append_version=True
-)
-
-# For single file
-app.router.add_get('/favicon.ico', lambda r: web.FileResponse('favicon.ico'))
-```
-
-## Templates
-
-### Jinja2 Integration
-
-```bash
-pip install aiohttp-jinja2 jinja2
-```
-
-```python
-from aiohttp import web
-import aiohttp_jinja2
-import jinja2
-
-# Setup
-loader = jinja2.FileSystemLoader('templates')
-env = aiohttp_jinja2.Environment(
-    loader=loader,
-    autoescape=True,
-    enable_async=True
-)
-aiohttp_jinja2.setup(app, environment=env)
-
-# Use in handler
-@aiohttp_jinja2.template('index.html')
-async def index(request):
-    return {
-        'title': 'My Page',
-        'users': ['Alice', 'Bob', 'Charlie']
-    }
-```
-
-### Template Filters
-
-```python
-from aiohttp import web
-import aiohttp_jinja2
-import jinja2
-
-env = aiohttp_jinja2.Environment(
-    loader=jinja2.FileSystemLoader('templates')
-)
-
-# Custom filter
-@env.template_filter('uppercase')
-def uppercase(s):
-    return s.upper()
-
-# Use in template: {{ name|uppercase }}
-aiohttp_jinja2.setup(app, environment=env)
-```
-
-## Best Practices
-
-### Session Management
-
-```python
-# ✅ GOOD: Reuse single session
-async def setup(app):
-    app['session'] = aiohttp.ClientSession()
-
-async def cleanup(app):
-    await app['session'].close()
-
-app.on_startup.append(setup)
-app.on_cleanup.append(cleanup)
-
-async def good_handler(request):
-    session = request.app['session']
-    async with session.get(url) as response:
-        return response
-```
-
-### Connection Settings
-
-```python
-connector = aiohttp.TCPConnector(
-    limit=100,              # Total connection limit
-    limit_per_host=30,      # Per-host limit
-    ttl_dns_cache=300,      # DNS cache TTL
-    ssl=True,
-    keepalive_timeout=30,   # Keep connections alive
-)
-session = aiohttp.ClientSession(connector=connector)
-```
-
-### Error Handling
-
-```python
-async def safe_request(url):
-    try:
-        async with session.get(url) as response:
+async def fetch_data():
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.example.com/data') as response:
             response.raise_for_status()
             return await response.json()
-    except aiohttp.ClientError as e:
-        logger.error(f"Request failed: {e}")
-        return None
+
+asyncio.run(fetch_data())
 ```
 
-### Do:
+### Connection Pooling Configuration
 
-- Reuse ClientSession (not create per request)
-- Always use `async with` for responses
-- Set timeouts on all requests
-- Use `raise_for_status()` for HTTP errors
-- Implement proper error handling
-- Use structured logging
-- Validate request data with Pydantic
-- Add authentication middleware
-- Use connection pooling
+```python
+import aiohttp
 
-### Don't:
+# Default connector (often insufficient for production)
+# session = aiohttp.ClientSession()  # ❌ BAD: Uses defaults
 
-- Create ClientSession in handler
-- Forget to close sessions on shutdown
-- Use sync I/O in handlers
-- Store large data in memory (use streaming)
-- Rely on default timeouts
-- Skip authentication middleware
+# Production-ready connector
+connector = aiohttp.TCPConnector(
+    limit=100,              # Total connection pool size (default: 100)
+    limit_per_host=30,      # Max connections per host (default: 30)
+    ttl_dns_cache=300,      # DNS cache TTL in seconds
+    ssl=True,               # Verify SSL certificates
+    enable_cleanup_closed=True,  # Clean closed connections
+)
+
+timeout = aiohttp.ClientTimeout(
+    total=30,       # Total request timeout (connect + transfer)
+    connect=5,      # Connection establishment timeout
+    sock_connect=5, # Socket connection timeout
+    sock_read=10,   # Read timeout (per read operation)
+)
+
+session = aiohttp.ClientSession(
+    connector=connector,
+    timeout=timeout,
+    headers={'User-Agent': 'my-app/1.0'}
+)
+```
+
+### Session Lifecycle
+
+```python
+# ✅ GOOD: Reuse session across requests
+async def process_multiple_urls(urls):
+    timeout = aiohttp.ClientTimeout(total=30)
+    connector = aiohttp.TCPConnector(limit=100)
+    
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        tasks = [fetch_url(session, url) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return results
+
+async def fetch_url(session, url):
+    async with session.get(url) as response:
+        response.raise_for_status()
+        return await response.json()
+
+# ❌ BAD: Creating session per request (causes socket exhaustion)
+async def bad_pattern(urls):
+    results = []
+    for url in urls:
+        async with aiohttp.ClientSession() as session:  # New session each time
+            async with session.get(url) as response:
+                results.append(await response.json())
+        # Session closed immediately after each request
+    return results
+```
+
+## Anti-Patterns and Failure Modes
+
+### Socket Exhaustion from Session Per Request
+
+**Symptom:** `OSError: [Errno 24] Too many open files` or connection timeouts under load
+
+**Cause:** Creating `ClientSession()` inside request handlers or loops without reuse. Each session maintains its own connection pool and file descriptors.
+
+**Fix:**
+```python
+# ❌ ANTI-PATTERN: Session created per request
+async def handler(request):
+    session = aiohttp.ClientSession()  # New session every request
+    async with session.get(url) as resp:
+        return web.json_response(await resp.json())
+
+# ✅ FIX: Session stored in app, reused across requests
+async def init_app():
+    app = web.Application()
+    app['session'] = aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(limit=100)
+    )
+    return app
+
+async def cleanup_app(app):
+    await app['session'].close()
+
+app = await init_app()
+app.on_cleanup.append(cleanup_app)
+
+async def handler(request):
+    session = request.app['session']
+    async with session.get(url) as resp:
+        return web.json_response(await resp.json())
+```
+
+### No Total Timeout: Hung Server Holds Connections
+
+**Symptom:** Connections accumulate, eventually hitting `limit` in TCPConnector, new requests hang
+
+**Cause:** Missing `ClientTimeout` means no total timeout. A slow or hung server can hold connections indefinitely.
+
+**Fix:**
+```python
+# ❌ ANTI-PATTERN: No timeout specified
+session = aiohttp.ClientSession()
+async with session.get('https://slow-api.com/data') as resp:
+    # If server hangs, this waits forever
+    data = await resp.json()
+
+# ✅ FIX: Always set timeouts
+timeout = aiohttp.ClientTimeout(
+    total=30,       # Max total time for entire request
+    connect=5,      # Max time to establish connection
+    sock_read=10    # Max time between read operations
+)
+session = aiohttp.ClientSession(timeout=timeout)
+```
+
+### Missing Read/Connect Timeouts
+
+**Symptom:** Connection established but data never arrives; or DNS resolution hangs
+
+**Cause:** Only setting `total` timeout isn't enough. `sock_read` and `connect` catch specific failure modes.
+
+**Fix:**
+```python
+# ❌ ANTI-PATTERN: Only total timeout
+timeout = aiohttp.ClientTimeout(total=60)
+
+# ✅ FIX: Granular timeouts
+timeout = aiohttp.ClientTimeout(
+    total=60,       # Overall request timeout
+    connect=5,      # Fail fast if can't connect
+    sock_connect=5, # Socket connection timeout
+    sock_read=30    # Read timeout (prevents stuck on slow responses)
+)
+```
+
+### Reusing Session Across Event Loops
+
+**Symptom:** `RuntimeError: Cannot call nested app.handler()` or `RuntimeError: Session is closed`
+
+**Cause:** `ClientSession` is bound to the event loop it was created on. Reusing it after `asyncio.run()` restarts the loop.
+
+**Fix:**
+```python
+# ❌ ANTI-PATTERN: Global session
+session = aiohttp.ClientSession()  # Created at module load
+
+async def main():
+    asyncio.run(fetch_data())  # New event loop
+    # session is bound to old loop!
+
+# ✅ FIX: Create session within event loop context
+async def main():
+    async with aiohttp.ClientSession() as session:
+        await fetch_data(session)
+
+asyncio.run(main())
+```
+
+### Not Releasing Response Resources
+
+**Symptom:** Memory growth, connection pool depletion over time
+
+**Cause:** Not using `async with` or not calling `response.release()` leaves connections in limbo.
+
+**Fix:**
+```python
+# ❌ ANTI-PATTERN: Not consuming response
+async with session.get(url) as response:
+    # Forgot to read/release
+    pass
+# Response may not be fully released
+
+# ✅ FIX: Always consume or explicitly release
+async with session.get(url) as response:
+    data = await response.read()  # Consume fully
+# OR
+async with session.get(url) as response:
+    if response.status != 200:
+        response.release()  # Explicit release for early exit
+        raise Exception(f"Unexpected status: {response.status}")
+```
+
+## Client/Server Selection Guidance
+
+### When to Tune TCPConnector
+
+**Plain `ClientSession` is fine when:**
+- Making occasional requests (< 10/second)
+- Single host API calls
+- Development/testing
+
+**Tune `TCPConnector` when:**
+- High throughput (> 100 req/s) → increase `limit` and `limit_per_host`
+- Calling many different hosts → increase `limit`, keep `limit_per_host` moderate
+- Connection errors under load → enable `enable_cleanup_closed=True`
+- DNS lookups are slow → set `ttl_dns_cache=300` or higher
+
+```python
+# High-throughput single API
+connector = aiohttp.TCPConnector(
+    limit=500,
+    limit_per_host=100,
+    ttl_dns_cache=300
+)
+
+# Many different hosts (aggregator pattern)
+connector = aiohttp.TCPConnector(
+    limit=1000,
+    limit_per_host=10,  # Don't overwhelm any single host
+    ttl_dns_cache=600
+)
+```
+
+### When aiohttp is Wrong
+
+**Use httpx instead when:**
+- Need HTTP/2 support (aiohttp's is experimental)
+- Want sync API alongside async (httpx provides both)
+- Using libraries that don't play well with aiohttp's connector
+
+**Use sync HTTP client (requests) when:**
+- Codebase is synchronous
+- Integration with sync frameworks (Flask without ASGI, Django sync views)
+- HTTP/2 not required and simplicity preferred
+
+## Testing
+
+See `references/testing.md` for pytest-aiohttp fixtures, test client usage, and lifespan testing patterns.
 
 ## Deep Dives
 
-For detailed coverage of advanced topics, load these reference files on demand:
+Load these reference files on demand for specific topics:
 
-- **Middleware & Auth** — `references/middleware.md`: Global error handlers, logging, CORS, rate limiting, JWT/basic auth patterns
-- **Client & Performance** — `references/client.md`: ClientSession usage, configuration, WebSocket client, keepalive, streaming, compression
-- **Testing & Lifespan** — `references/testing.md`: Application signals, lifespan context, test client, pytest-aiohttp fixtures
-- **Troubleshooting** — `references/troubleshooting.md`: Connection refused, timeouts, SSL errors, memory leaks
+- **Middleware & Auth** — `references/middleware.md`: Global error handlers, logging, CORS, rate limiting, JWT/basic auth patterns (when implementing cross-cutting concerns)
+- **Client & Performance** — `references/client.md`: WebSocket client, streaming uploads, compression, keepalive tuning (when optimizing client performance)
+- **Testing & Lifespan** — `references/testing.md`: Application signals, lifespan context, test client, pytest-aiohttp fixtures (when writing tests)
+- **Troubleshooting** — `references/troubleshooting.md`: Connection refused, timeouts, SSL errors, memory leaks (when debugging issues)
 
 **Official Documentation**: https://docs.aiohttp.org/
 **GitHub Repository**: https://github.com/aio-libs/aiohttp

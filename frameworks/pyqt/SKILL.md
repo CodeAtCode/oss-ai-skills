@@ -32,6 +32,107 @@ For detailed information, see the specialized sub-skills:
 | **pyqt-styling** | QSS styling and themes | [styling/SKILL.md](styling/SKILL.md) |
 | **pyqt-multimedia** | Audio, video, camera, recording | [multimedia/SKILL.md](multimedia/SKILL.md) |
 
+## Architecture Decision: MVC vs MVVM in Qt
+
+Qt supports multiple architectural patterns. Choose based on your data-display complexity.
+
+### MVC (Model-View-Controller)
+
+**When to use**: Simple data display with inline editing, standard item views.
+
+- **Model**: `QAbstractItemModel` subclass owns the data
+- **View**: `QTableView`, `QTreeView`, `QListView` displays data
+- **Controller**: Built into the view (header clicks, selection handling)
+- **Validation**: In the model's `setData()` method
+- **Signals**: Model emits `dataChanged()`, `rowsInserted()` to notify views
+
+```python
+# Model owns data and validation
+class DataModel(QAbstractTableModel):
+    def setData(self, index, value, role):
+        if not self._validate(value):
+            return False
+        # update and emit dataChanged
+```
+
+### MVVM (Model-View-ViewModel)
+
+**When to use**: Same data displayed in multiple widgets with different formatting, complex UI state.
+
+- **Model**: Data source (database, API, file)
+- **ViewModel**: Transforms model data for display, owns UI state
+- **View**: PyQt widgets bound to ViewModel via signals
+- **Validation**: In ViewModel, before updating Model
+- **Signals**: ViewModel exposes `Property` signals; View connects to them
+
+```python
+# ViewModel transforms data for display
+class UserViewModel(QObject):
+    display_name = Property(str, _display_name_changed)
+    
+    def __init__(self, user_model):
+        self._user = user_model
+        self._user.nameChanged.connect(self._on_model_changed)
+```
+
+### Practical Test: Where Does Formatting Belong?
+
+If the same data is displayed in two widgets with different formatting, the formatting belongs in a view-model/delegate, not duplicated in both widgets.
+
+**Bad**:
+```python
+# Widget A
+label.setText(f"{value:.2f} €")
+# Widget B  
+label.setText(f"€ {value:,.2f}")
+```
+
+**Good**:
+```python
+# ViewModel provides formatted strings
+class PriceViewModel(QObject):
+    display_eu = Property(str)
+    display_us = Property(str)
+    
+    def set_price(self, value):
+        self._price = value
+        self.display_eu_changed.emit()
+        self.display_us_changed.emit()
+```
+
+### Signals/Slots: When Is That Enough?
+
+Signals and slots alone are sufficient when:
+- One widget displays one data source
+- No complex derived state (e.g., "show X only if Y and Z")
+- Validation can live in the model's `setData()`
+- You don't need to test UI logic without the widgets
+
+Add a ViewModel layer when:
+- Multiple views need the same data in different formats
+- UI state (enabled/disabled, visibility) depends on complex conditions
+- You want to test display logic without instantiating widgets
+
+## Where Does This Belong?
+
+Use this routing to load only the sub-skill you need:
+
+| Intent | Load This Sub-Skill |
+|--------|--------------------|
+| Signal declaration, slot decorators, `pyqtSignal`/`Signal`, typed signals, `connect()`, `disconnect()`, signal chains | `pyqt/core` |
+| Widget composition (building custom widgets from multiple widgets), item views (QTableView, QTreeView), delegates (QItemDelegate), event filters | `pyqt/widgets` |
+| `QThread` worker-object pattern, `QThreadPool`/`QRunnable`, `QExecutor`, thread safety, cancellation, blocking operations | `pyqt/threading` |
+| Standard dialogs (QFileDialog, QMessageBox, QInputDialog, QColorDialog, QFontDialog), custom QDialog patterns, modal vs modeless | `pyqt/dialogs` |
+| pytest-qt fixture (`qtbot`), `waitSignal`, mouse/keyboard simulation, dialog testing, model/view testing | `pyqt/testing` |
+| QSS syntax, pseudo-states (`:hover`, `:pressed`), widget-specific styles, theming, platform differences | `pyqt/styling` |
+
+### What Does NOT Belong in the Hub
+
+- **Signals/slots basics** → `pyqt/core` (this hub only routes)
+- **Widget lists** → `pyqt/widgets` (this hub only routes)
+- **QSS syntax and examples** → `pyqt/styling` (this hub only routes)
+- **Layout code snippets** → `pyqt/widgets` (this hub only routes)
+
 ## Deep Dives
 
 Load these sub-skills for specialized topics:
@@ -158,50 +259,7 @@ from PySide6.QtCore import Qt, QObject, QTimer, QThread, Signal, Slot, Property,
 from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPen, QBrush, QColor, QFont, QCursor, QKeySequence, QShortcut
 ```
 
-### Signal/Slot Basics
 
-```python
-from PySide6.QtCore import QObject, Signal, Slot
-
-class MyObject(QObject):
-    valueChanged = Signal(int)
-    
-    @Slot(int)
-    def setValue(self, value):
-        self._value = value
-        self.valueChanged.emit(value)
-
-# Connect
-button.clicked.connect(self.onButtonClick)
-
-# Emit
-self.valueChanged.emit(42)
-```
-
-### Layout Basics
-
-```python
-from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout
-
-# Vertical
-layout = QVBoxLayout()
-layout.addWidget(label)
-layout.addWidget(button)
-
-# Horizontal
-h_layout = QHBoxLayout()
-h_layout.addWidget(left)
-h_layout.addWidget(right)
-
-# Grid
-grid = QGridLayout()
-grid.addWidget(label, 0, 0)
-grid.addWidget(input, 0, 1)
-
-# Form
-form = QFormLayout()
-form.addRow("Name:", nameEdit)
-```
 
 ### Common Properties
 
@@ -213,38 +271,7 @@ widget.setObjectName("myButton")  # QSS selector
 widget.setProperty("primary", True)  # Custom property
 ```
 
-### Dialogs
 
-```python
-filename, _ = QFileDialog.getOpenFileName(self, "Open", "", "Files (*)")
-filename, _ = QFileDialog.getSaveFileName(self, "Save", "", "Text (*.txt)")
-directory = QFileDialog.getExistingDirectory(self, "Select")
-reply = QMessageBox.question(self, "Confirm", "Continue?", QMessageBox.Yes | QMessageBox.No)
-text, ok = QInputDialog.getText(self, "Input", "Name:")
-color = QColorDialog.getColor()
-font, ok = QFontDialog.getFont()
-```
-
-### Threading
-
-```python
-# Worker pattern
-class Worker(QObject):
-    finished = Signal(object)
-    @Slot()
-    def process(self): self.finished.emit(result)
-
-thread = QThread()
-worker = Worker()
-worker.moveToThread(thread)
-thread.started.connect(worker.process)
-worker.finished.connect(thread.quit)
-thread.start()
-
-# Thread pool
-pool = QThreadPool()
-pool.start(QRunnable(task))
-```
 
 ## Packaging & Distribution
 

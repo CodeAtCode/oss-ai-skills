@@ -17,7 +17,7 @@ metadata:
 
 # LlamaIndex Development
 
-Complete guide for building LLM applications with LlamaIndex framework.
+Complete guide for building RAG applications with LlamaIndex framework.
 
 ## Overview
 
@@ -70,7 +70,7 @@ from llama_index.llms.openai import OpenAI
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 # Set API key
-os.environ["OPENAI_API_KEY"] = "your-api-key"
+os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY"
 
 # Configure global settings
 Settings.llm = OpenAI(model="gpt-4o", temperature=0.0)
@@ -88,7 +88,7 @@ Settings.chunk_overlap = 50
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage
 
 # Load documents
-documents = SimpleDirectoryReader("./data").load_data()
+documents = SimpleDirectoryReader("./docs").load_data()
 
 # Create index
 index = VectorStoreIndex.from_documents(documents)
@@ -111,12 +111,12 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 
 # Setup ChromaDB
 db = chromadb.PersistentClient(path="./chroma_db")
-chroma_collection = db.get_or_create_collection("my_collection")
+chroma_collection = db.get_or_create_collection("my-index")
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
 # Load and index
-documents = SimpleDirectoryReader("./data").load_data()
+documents = SimpleDirectoryReader("./docs").load_data()
 index = VectorStoreIndex.from_documents(
     documents,
     storage_context=storage_context,
@@ -142,7 +142,7 @@ from llama_index.core import SimpleDirectoryReader, Document
 
 # Load from directory
 documents = SimpleDirectoryReader(
-    input_dir="./data",
+    input_dir="./docs",
     required_exts=[".pdf", ".txt", ".md"],
     exclude=["*.tmp"],
     recursive=True,
@@ -166,7 +166,7 @@ def custom_metadata_func(file_path: str) -> dict:
     }
 
 documents = SimpleDirectoryReader(
-    input_dir="./data",
+    input_dir="./docs",
     file_metadata=custom_metadata_func,
 ).load_data()
 ```
@@ -209,157 +209,238 @@ reader = CustomDataReader()
 documents = reader.load_data("api://endpoint")
 ```
 
-## Node Parsing
+## Chunking Decision Guide
 
-### Chunking Strategies
+Chunk boundaries directly determine citation quality and retrieval accuracy. Choose based on your data structure and query patterns.
+
+### When Sentence Splitting Beats Semantic Chunking
+
+**Use sentence splitting when:**
+- Your documents have clear structural divisions (headings, sections, pages)
+- You need predictable chunk sizes for cost/latency estimation
+- Your queries are fact-based rather than concept-based
+- You're working with technical documentation or legal texts
+
+**Use semantic chunking when:**
+- Your documents lack clear structure (emails, chat logs, unstructured notes)
+- Query intent varies significantly within paragraphs
+- You need to preserve thematic boundaries over structural ones
+- You have budget for embedding-based splitting overhead
+
+### Fixed-Size-with-Overlap Pitfalls
 
 ```python
-from llama_index.core.node_parser import (
-    SentenceSplitter,
-    TokenTextSplitter,
-    SemanticSplitterNodeParser,
-    HierarchicalNodeParser,
-)
-from llama_index.embeddings.openai import OpenAIEmbedding
-
-# Sentence splitter (default)
+# ❌ PITFALL: Ignoring semantic boundaries
 splitter = SentenceSplitter(
-    chunk_size=1024,
-    chunk_overlap=20,
-    paragraph_separator="\n\n",
-)
-
-nodes = splitter.get_nodes_from_documents(documents)
-
-# Token splitter
-token_splitter = TokenTextSplitter(
     chunk_size=512,
     chunk_overlap=50,
+    # No paragraph or section awareness
 )
 
-# Semantic splitter (uses embeddings)
-semantic_splitter = SemanticSplitterNodeParser(
-    buffer_size=1,
-    breakpoint_percentile_threshold=95,
-    embed_model=OpenAIEmbedding(),
-)
-
-# Hierarchical node parser
-hierarchical_parser = HierarchicalNodeParser.from_defaults(
-    chunk_sizes=[2048, 512, 128],  # Parent -> Child -> Grandchild
+# ✅ BETTER: Respect document structure
+splitter = SentenceSplitter(
+    chunk_size=512,
+    chunk_overlap=50,
+    paragraph_separator="\n\n",  # Split on paragraphs first
+    secondary_chunking_regex=r"\n#{1,6} ",  # Don't break across headings
 )
 ```
 
-### Node Processing Pipeline
+**Common overlap mistakes:**
+- Overlap too small (<10%): Context boundaries get cut mid-sentence
+- Overlap too large (>30%): Redundant embeddings, higher cost, diluted relevance
+- Fixed overlap ignores structure: Section headers appear in wrong chunks
+
+### Metadata to Attach at Ingest Time
+
+Metadata enables filtering and improves retrieval precision. Attach these at ingest:
+
+| Metadata Field | Why It Matters |
+|----------------|----------------|
+| `source` (file path) | Cite exact document when answering |
+| `section_heading` | Preserve document hierarchy in context |
+| `page_number` | Critical for PDFs and scanned documents |
+| `document_date` | Filter by recency for time-sensitive queries |
+| `tenant_id` / `PROJECT_KEY` | Multi-tenant isolation via metadata filters |
 
 ```python
-from llama_index.core.ingestion import IngestionPipeline
-from llama_index.core.extractors import (
-    TitleExtractor,
-    SummaryExtractor,
-    KeywordExtractor,
-)
+from llama_index.core import Document
 
-# Create pipeline
-pipeline = IngestionPipeline(
-    transformations=[
-        SentenceSplitter(chunk_size=1024, chunk_overlap=20),
-        TitleExtractor(),
-        SummaryExtractor(),
-        KeywordExtractor(),
-        OpenAIEmbedding(),
-    ],
-)
+def load_with_metadata(file_path: str) -> List[Document]:
+    """Load documents with essential metadata for retrieval."""
+    # Parse file to extract structure
+    content, headings, page_numbers = parse_document(file_path)
 
-# Run pipeline
-nodes = pipeline.run(documents=documents)
+    return [
+        Document(
+            text=chunk.text,
+            metadata={
+                "source": file_path,
+                "section": chunk.section,
+                "page": page_numbers[chunk.start_line],
+                "tenant_id": "my-tenant",  # Replace with actual tenant
+            },
+        )
+        for chunk in split_by_structure(content, headings)
+    ]
+```
 
-# Access metadata
-for node in nodes[:3]:
-    print(f"Title: {node.metadata.get('document_title')}")
-    print(f"Summary: {node.metadata.get('section_summary')}")
-    print(f"Keywords: {node.metadata.get('excerpt_keywords')}")
+### Evaluating Chunking Changes
+
+Never guess whether a chunking change helped. Measure:
+
+1. **Create a fixed eval set:** 20-50 query-answer pairs hand-labeled from your actual use cases
+2. **Run retrieval before change:** Record which chunks are retrieved for each query
+3. **Apply chunking change:** Re-index the same documents
+4. **Run retrieval after change:** Compare hit rates on the same queries
+5. **Measure:**
+   - Hit rate: % of queries where relevant chunk appears in top-k
+   - MRR (Mean Reciprocal Rank): How high relevant chunks rank
+   - Citation quality: Do answers reference the correct source sections?
+
+```python
+# Simple hit rate evaluation
+def evaluate_chunking(queries_with_relevant_chunks, retriever, top_k=5):
+    hits = 0
+    for query, relevant_ids in queries_with_relevant_chunks:
+        nodes = retriever.retrieve(query)
+        retrieved_ids = {n.node.node_id for n in nodes}
+        if relevant_ids & retrieved_ids:  # Any overlap = hit
+            hits += 1
+    return hits / len(queries_with_relevant_chunks)
 ```
 
 ## Vector Stores
 
-### ChromaDB
+Vector store setup follows the same pattern across backends:
 
 ```python
-import chromadb
-from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
+from llama_index.vector_stores.chroma import ChromaVectorStore
+import chromadb
 
-# Persistent client
+# 1. Initialize backend client
 db = chromadb.PersistentClient(path="./chroma_db")
-chroma_collection = db.get_or_create_collection("my_collection")
+chroma_collection = db.get_or_create_collection("my-index")
 
-# Create vector store
+# 2. Wrap as LlamaIndex vector store
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-# Create index
-index = VectorStoreIndex.from_documents(
-    documents,
-    storage_context=storage_context,
-)
-
-# Load existing
-index = VectorStoreIndex.from_vector_store(vector_store)
+# 3. Create index with storage context
+index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
 ```
 
-### Pinecone
+**Backend-specific notes:**
+- ChromaDB: Use `PersistentClient` for local storage, `EphemeralClient` for testing
+- Pinecone: Create index with matching embedding dimensions (1536 for text-embedding-3-small)
+- Qdrant: Specify `collection_name` and ensure vector size matches embed_model
 
+For detailed setup per backend, see `references/retrieval.md`.
+
+## Retrieval Debugging
+
+Symptom-first guide to fixing retrieval problems.
+
+### Answers Cite the Wrong Section
+
+**Symptom:** Response references information from the wrong document or section.
+
+**Check:**
+1. Are metadata filters applied at query time?
+2. Do chunks have accurate `source` and `section` metadata?
+3. Is the LLM instructed to cite sources?
+
+**Fix:**
 ```python
-import pinecone
-from llama_index.vector_stores.pinecone import PineconeVectorStore
-from llama_index.core import VectorStoreIndex, StorageContext
-
-# Initialize Pinecone
-pinecone.init(
-    api_key=os.environ["PINECONE_API_KEY"],
-    environment=os.environ["PINECONE_ENV"],
-)
-
-# Create index if not exists
-if "my_index" not in pinecone.list_indexes():
-    pinecone.create_index(
-        "my_index",
-        dimension=1536,
-        metric="cosine",
+# Apply metadata filters to narrow retrieval
+query_engine = index.as_query_engine(
+    filters=MetadataFilter(
+        key="tenant_id", value="my-tenant"  # Replace with actual filter
     )
+)
 
-pinecone_index = pinecone.Index("my_index")
-vector_store = PineconeVectorStore(pinecone_index=pinecone_index)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
-
-# Create index
-index = VectorStoreIndex.from_documents(
-    documents,
-    storage_context=storage_context,
+# Or filter at retriever level
+retriever = index.as_retriever(
+    filters=MetadataFilter(key="source", value="specific-file.pdf")
 )
 ```
 
-### Qdrant
+### Retrieval Returns Nothing Relevant
 
+**Symptom:** Query returns chunks that don't match the question intent.
+
+**Check:**
+1. Do embedding dimensions match at index and query time?
+2. Is the embed_model the same for indexing and querying?
+3. Is `similarity_top_k` too low?
+
+**Fix:**
 ```python
-from qdrant_client import QdrantClient
-from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.core import VectorStoreIndex, StorageContext
+# Ensure consistent embedding model
+from llama_index.embeddings.openai import OpenAIEmbedding
 
-# Initialize client
-client = QdrantClient(host="localhost", port=6333)
+embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
-# Create vector store
-vector_store = QdrantVectorStore(
-    collection_name="my_collection",
-    client=client,
+# At index time
+index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
+
+# At query time (must match)
+query_engine = index.as_query_engine(
+    embed_model=embed_model,  # Same model as index time
+    similarity_top_k=10,  # Retrieve more before reranking
+)
+```
+
+### Answers Are Generic
+
+**Symptom:** Responses lack specificity, sound like boilerplate.
+
+**Check:**
+1. Is `similarity_top_k` too low (<5)?
+2. Is reranking enabled?
+3. Are retrieved chunks too large (diluted relevance)?
+
+**Fix:**
+```python
+from llama_index.core.postprocessor import SentenceTransformerRerank
+
+# Retrieve more, then rerank
+query_engine = index.as_query_engine(
+    similarity_top_k=20,
+    node_postprocessors=[
+        SentenceTransformerRerank(
+            model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+            top_n=5,
+        ),
+    ],
+)
+```
+
+### Hybrid Search Behaves Inconsistently
+
+**Symptom:** Keyword + vector search gives unpredictable results.
+
+**Check:**
+1. Is the BM25 weight tuned for your data?
+2. Is the keyword index fresh (rebuilt after document updates)?
+3. Are you using AND vs OR mode appropriately?
+
+**Fix:**
+```python
+from llama_index.core.retrievers import QueryFusionRetriever
+
+# Tune query fusion parameters
+fusion_retriever = QueryFusionRetriever(
+    retrievers=[vector_retriever, keyword_retriever],
+    similarity_top_k=10,
+    num_queries=3,
+    mode="reciprocal_rerank",  # Or "weighted_sum"
 )
 
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
-index = VectorStoreIndex.from_documents(
-    documents,
-    storage_context=storage_context,
+# For strict matching, use AND mode
+hybrid_retriever = HybridRetriever(
+    vector_index, keyword_index, mode="AND"  # Only return nodes in both
 )
 ```
 
@@ -367,9 +448,9 @@ index = VectorStoreIndex.from_documents(
 
 Advanced topics are split into reference files loaded on demand:
 
-- **retrieval.md** — Advanced retrievers (hybrid, query fusion, auto-merging), rerankers, query engines (router, sub-question, multi-step)
-- **agents-workflows.md** — Agents (ReAct, function calling, custom tools), streaming, workflow engine, chat engines
-- **evaluation-observability.md** — Evaluation (faithfulness, relevancy, ragas), observability (callbacks, LangSmith)
+- **references/retrieval.md** — Advanced retrievers (hybrid, query fusion, auto-merging), rerankers, query engines (router, sub-question, multi-step)
+- **references/agents-workflows.md** — Agents (ReAct, function calling, custom tools), streaming, workflow engine, chat engines
+- **references/evaluation-observability.md** — Evaluation (retrieval hit rate, recall@k, faithfulness, latency/cost tracking), observability (callbacks, LangSmith)
 
 ## Common Issues
 

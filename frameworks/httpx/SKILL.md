@@ -1,6 +1,6 @@
 ---
 name: httpx
-description: Use when making HTTP requests in Python with httpx - sync and async clients, streaming, HTTP/2, connection pooling, retries, proxies, SSL verification, respx testing, or FastAPI and Django integration
+description: Use when making HTTP requests in Python with httpx - sync and async clients, connection pooling, timeouts, HTTP/2, retry patterns, transport configuration, or choosing between httpx/requests/aiohttp
 metadata:
   author: mte90
   version: 2.0.0
@@ -14,480 +14,365 @@ metadata:
 
 # httpx
 
-Modern HTTP client for Python.
+Modern HTTP client with sync/async APIs, HTTP/2, and production-grade features.
 
-## Overview
-
-httpx is a modern, full-featured HTTP client for Python that provides a simple but comprehensive API for making HTTP requests. It supports both synchronous and asynchronous programming, making it suitable for a wide variety of use cases.
-
-**Key Features:**
-- Sync and async APIs
-- HTTP/2 support
-- Connection pooling
-- Timeouts and retries
-- Cookie persistence
-- Request/response streaming
-- Proxies support
-- Authentication
-- Modern Python type hints
-
-### Installation
-
-```bash
-# Basic installation
-pip install httpx
-
-# With HTTP/2 support
-pip install httpx[http2]
-
-# With SOCKS proxy support
-pip install httpx[socks]
-
-# With all optional dependencies
-pip install httpx[http2,socks,trio,curio]
-```
-
-## Basic Usage
-
-### Synchronous Requests
+## Quick Start
 
 ```python
 import httpx
 
-# GET request
-response = httpx.get("https://example.com")
-print(response.status_code)
-print(response.text)
-print(response.json())
-
-# POST request with JSON
-response = httpx.post(
-    "https://api.example.com/users",
-    json={"name": "John", "email": "john@example.com"}
-)
-print(response.status_code)
-
-# PUT request
-response = httpx.put(
-    "https://api.example.com/users/1",
-    data={"name": "Jane"}
+# Always use timeouts in production
+timeout = httpx.Timeout(
+    connect=5.0,   # Connection establishment
+    read=30.0,     # Response body read
+    write=10.0,    # Request body write
+    pool=5.0       # Connection pool acquisition
 )
 
-# DELETE request
-response = httpx.delete("https://api.example.com/users/1")
-
-# HEAD request
-response = httpx.head("https://example.com")
-print(response.headers)
-
-# OPTIONS request
-response = httpx.options("https://api.example.com")
-print(response.headers["allow"])
+with httpx.Client(timeout=timeout) as client:
+    response = client.get("https://api.example.com/data")
+    print(response.status_code)
+    print(response.json())
 ```
 
-### Async Requests
+See [Quick Start](https://www.python-httpx.org/quickstart/) for basic request patterns.
 
-```python
-import asyncio
-import httpx
+## Production Configuration
 
-async def main():
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://example.com")
-        print(response.status_code)
-        print(response.text)
+### Timeouts (Mandatory)
 
-asyncio.run(main())
-```
-
-## Response Handling
-
-### Status Codes
+The most common production failure is `httpx.get(url)` with no timeout—a hung server holds the connection forever.
 
 ```python
 import httpx
 
-response = httpx.get("https://example.com")
+# Configure once on the client, reuse across requests
+timeout = httpx.Timeout(
+    connect=5.0,   # Fails if TCP handshake exceeds this
+    read=30.0,     # Fails if server stops sending data
+    write=10.0,    # Fails if client can't send request
+    pool=5.0       # Fails if no connection available in pool
+)
 
-# Check status code
-print(response.status_code)  # 200
-
-# Status code categories
-print(response.is_success)      # True for 2xx
-print(response.is_redirect)     # True for 3xx
-print(response.is_client_error)  # True for 4xx
-print(response.is_server_error)  # True for 5xx
-
-# Raise for error status codes
-response = httpx.get("https://example.com/not-found")
-try:
-    response.raise_for_status()
-except httpx.HTTPStatusError as e:
-    print(f"Error: {e.response.status_code}")
+client = httpx.Client(timeout=timeout)
 ```
 
-### Response Content
+**Timeout exception hierarchy:**
+
+| Exception | When it fires | What it indicates |
+|-----------|---------------|-------------------|
+| `ConnectTimeout` | TCP handshake / TLS handshake | Server unreachable or firewall blocking |
+| `ReadTimeout` | Waiting for response body | Server processing too slowly |
+| `WriteTimeout` | Sending request body | Client network saturated |
+| `PoolTimeout` | Waiting for connection from pool | Connection pool exhausted |
 
 ```python
-import httpx
-
-response = httpx.get("https://example.com")
-
-# Text content
-print(response.text)  # Returns string
-
-# Binary content
-print(response.content)  # Returns bytes
-
-# JSON content (auto-parsed)
-data = response.json()
-print(data["key"])
-
-# Streaming response
-async with httpx.AsyncClient() as client:
-    async with client.stream("GET", "https://example.com/large-file") as response:
-        # Process chunks
-        async for chunk in response.aiter_bytes():
-            print(chunk)
-
-        # Or iter text
-        async for line in response.aiter_text():
-            print(line)
-```
-
-### Headers
-
-```python
-import httpx
-
-response = httpx.get("https://example.com")
-
-# Response headers
-print(response.headers)
-print(response.headers["content-type"])
-print(response.headers.get("content-length"))
-
-# Request headers
-response = httpx.get(
-    "https://api.example.com",
-    headers={
-        "Authorization": "Bearer token",
-        "Accept": "application/json",
-        "User-Agent": "MyApp/1.0"
-    }
-)
-```
-
-### Cookies
-
-```python
-import httpx
-
-# Get cookies from response
-response = httpx.get("https://example.com")
-print(response.cookies)
-print(response.cookies["session_id"])
-
-# Send cookies
-response = httpx.get(
-    "https://example.com",
-    cookies={"session_id": "abc123"}
-)
-
-# Cookie jar
-import httpx
-cookies = httpx.Cookies()
-cookies.set("session", "value", domain="example.com")
-response = httpx.get("https://example.com", cookies=cookies)
-```
-
-## Request Configuration
-
-### Query Parameters
-
-```python
-import httpx
-
-# Simple params
-response = httpx.get(
-    "https://api.example.com/search",
-    params={"query": "python", "page": 1}
-)
-
-# List params
-response = httpx.get(
-    "https://api.example.com/users",
-    params={"id": [1, 2, 3]}  # ?id=1&id=2&id=3
-)
-```
-
-### Request Body
-
-```python
-import httpx
-
-# JSON body (auto-serialized)
-response = httpx.post(
-    "https://api.example.com/users",
-    json={"name": "John", "age": 30}
-)
-
-# Form data
-response = httpx.post(
-    "https://api.example.com/login",
-    data={"username": "john", "password": "secret"}
-)
-
-# Multipart file upload
-response = httpx.post(
-    "https://api.example.com/upload",
-    files={"document": open("file.pdf", "rb")}
-)
-
-# Multipart with data
-response = httpx.post(
-    "https://api.example.com/upload",
-    data={"title": "My Document"},
-    files={"document": ("doc.pdf", open("file.pdf", "rb"), "application/pdf")}
-)
-
-# Raw body
-response = httpx.post(
-    "https://api.example.com/data",
-    content=b"raw bytes"
-)
-```
-
-### Authentication
-
-```python
-import httpx
-from httpx import Auth
-
-# Basic auth
-response = httpx.get(
-    "https://api.example.com/protected",
-    auth=("username", "password")
-)
-
-# Custom auth class
-class CustomAuth(Auth):
-    def __init__(self, token):
-        self.token = token
-    
-    def auth_flow(self, request):
-        request.headers["Authorization"] = f"Bearer {self.token}"
-        yield request
-
-response = httpx.get(
-    "https://api.example.com",
-    auth=CustomAuth("my-token")
-)
-
-# Digest auth
-from httpx import DigestAuth
-response = httpx.get(
-    "https://api.example.com",
-    auth=DigestAuth("username", "password")
-)
-```
-
-### Timeouts
-
-```python
-import httpx
-from httpx import Timeout
-
-# Default timeout (5 seconds)
-response = httpx.get("https://example.com")
-
-# Custom timeout
-response = httpx.get(
-    "https://example.com",
-    timeout=10.0
-)
-
-# Configure timeout components
-timeout = Timeout(
-    connect=5.0,    # Connection timeout
-    read=30.0,      # Read timeout
-    write=10.0,     # Write timeout
-    pool=5.0        # Pool timeout
-)
-response = httpx.get("https://example.com", timeout=timeout)
-
-# No timeout
-response = httpx.get(
-    "https://example.com",
-    timeout=None
-)
-```
-
-### SSL Verification
-
-```python
-import httpx
-
-# Default (verify=True)
-response = httpx.get("https://example.com")
-
-# Disable verification (not recommended)
-response = httpx.get(
-    "https://example.com",
-    verify=False
-)
-
-# Custom CA bundle
-response = httpx.get(
-    "https://example.com",
-    verify="/path/to/ca-bundle.crt"
-)
-
-# Client certificates
-response = httpx.get(
-    "https://example.com",
-    cert=("/path/to/client.crt", "/path/to/client.key")
-)
-```
-
-## Best Practices
-
-### 1. Use Context Managers
-
-```python
-# Good: Context manager ensures cleanup
-with httpx.Client() as client:
-    response = client.get("https://api.example.com/users")
-    users = response.json()
-
-# Bad: Manual cleanup needed
-client = httpx.Client()
-try:
-    response = client.get("https://api.example.com/users")
-finally:
-    client.close()
-```
-
-### 2. Reuse Client for Performance
-
-```python
-# Good: Reuse client for multiple requests
-client = httpx.Client()
-try:
-    for user_id in range(1, 100):
-        response = client.get(f"https://api.example.com/users/{user_id}")
-        process(response.json())
-finally:
-    client.close()
-
-# Bad: New client for each request
-for user_id in range(1, 100):
-    with httpx.Client() as client:  # Inefficient!
-        response = client.get(f"https://api.example.com/users/{user_id}")
-```
-
-### 3. Always Set Timeouts
-
-```python
-# Good: Explicit timeouts
-timeout = httpx.Timeout(10.0, connect=5.0)
-response = client.get("https://api.example.com", timeout=timeout)
-
-# Default timeout is 5 seconds
-response = client.get("https://api.example.com")  # OK but explicit is better
-```
-
-### 4. Handle Exceptions
-
-```python
-import httpx
-from httpx import ConnectTimeout, ReadTimeout, HTTPError
+from httpx import ConnectTimeout, ReadTimeout, TimeoutException
 
 try:
     response = client.get("https://api.example.com")
 except ConnectTimeout:
-    print("Connection timed out")
+    # Server unreachable—retry with backoff or fail fast
+    pass
 except ReadTimeout:
-    print("Read timed out")
-except httpx.HTTPError as e:
-    print(f"HTTP error: {e}")
-except Exception as e:
-    print(f"Unexpected error: {e}")
+    # Server hung—may have partial response
+    pass
+except TimeoutException as e:
+    # Catch-all for any timeout subclass
+    print(f"Timeout: {e}")
 ```
 
-### 5. Use Async for I/O-bound Tasks
+### Connection Pooling
+
+**Rule: One `httpx.Client` per application/process, reused across requests.** A client per request defeats pooling and leaks connections.
 
 ```python
-# Good: Use async for multiple concurrent requests
-async def fetch_all(urls):
+# Correct: Single client reused
+class APIService:
+    def __init__(self):
+        limits = httpx.Limits(
+            max_connections=50,          # Max total connections
+            max_keepalive_connections=20, # Max idle connections
+            keepalive_expiry=30          # Keepalive timeout (seconds)
+        )
+        timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+        self.client = httpx.Client(limits=limits, timeout=timeout)
+
+    def fetch_user(self, user_id: int):
+        return self.client.get(f"/users/{user_id}")
+
+    def shutdown(self):
+        self.client.close()  # Call on app shutdown hook
+```
+
+**Common pooling mistakes:**
+
+```python
+# Wrong: New client per request (leaks connections)
+def handle_request():
+    with httpx.Client() as client:  # Creates new connection pool
+        return client.get("https://api.example.com")
+
+# Wrong: Sync and async clients are not interchangeable
+async def fetch_async():
+    with httpx.Client() as client:  # Blocks event loop!
+        return client.get("https://api.example.com")
+
+# Correct: Use AsyncClient in async contexts
+async def fetch_async():
     async with httpx.AsyncClient() as client:
-        return await asyncio.gather(
-            *[client.get(url) for url in urls]
+        return await client.get("https://api.example.com")
+```
+
+### HTTP/2 Configuration
+
+```python
+# Enable HTTP/2 (requires httpx[http2])
+client = httpx.Client(http2=True)
+
+# HTTP/2 requires ALPN negotiation
+# If server doesn't support it:
+# - Silent fallback to HTTP/1.1 (most common)
+# - RemoteProtocolError if ALPN fails explicitly
+```
+
+**When HTTP/2 is worth it:**
+- ✅ Many concurrent requests to the same host (multiplexing benefit)
+- ✅ Large response bodies (header compression helps)
+- ❌ Small request counts (TLS handshake overhead dominates)
+- ❌ Single-request scripts (no multiplexing benefit)
+
+```python
+# Check if HTTP/2 was negotiated
+response = client.get("https://api.example.com")
+print(response.http_version)  # "HTTP/2" or "HTTP/1.1"
+```
+
+### Retry Patterns (Idempotency Only)
+
+**Never retry non-idempotent requests.** A retried POST can duplicate a charge, create duplicate records, or trigger side effects twice.
+
+```python
+import httpx
+import time
+import random
+
+def exponential_backoff_with_jitter(attempt: int, base: float = 1.0, max_delay: float = 30.0) -> float:
+    """Bounded exponential backoff with jitter."""
+    delay = min(base * (2 ** attempt), max_delay)
+    jitter = random.uniform(0, delay * 0.1)  # 10% jitter
+    return delay + jitter
+
+def safe_get_with_retries(client: httpx.Client, url: str, max_retries: int = 3):
+    """Retry-safe GET request with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            response = client.get(url)
+            if response.status_code >= 500:
+                # Server error—may be safe to retry
+                time.sleep(exponential_backoff_with_jitter(attempt))
+                continue
+            return response
+        except (httpx.ConnectTimeout, httpx.ReadTimeout) as e:
+            if attempt == max_retries - 1:
+                raise  # Last attempt failed
+            time.sleep(exponential_backoff_with_jitter(attempt))
+    raise RuntimeError("Should not reach here")
+
+# NEVER RETRY: Non-idempotent operations
+def create_user(client: httpx.Client, data: dict):
+    """Post is not retry-safe—do not wrap in retry logic."""
+    return client.post("/users", json=data)
+    # If this fails, you don't know if it succeeded or not
+    # Implement idempotency keys instead of retries
+```
+
+**Transport-level retries:**
+
+httpx doesn't include `urllib3.Retry`-style built-in retries because idempotency is context-dependent. Use transport mounts for fine-grained control:
+
+```python
+# Custom retry transport (advanced)
+class RetryTransport(httpx.BaseTransport):
+    def __init__(self, transport: httpx.BaseTransport, max_retries: int = 3):
+        self.transport = transport
+        self.max_retries = max_retries
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        # Implement retry logic here, checking request.method for idempotency
+        pass
+
+client = httpx.Client(transport=RetryTransport(httpx.HTTPTransport()))
+```
+
+## Client Selection Guide
+
+Before choosing an HTTP client, run this check:
+
+```python
+# Decision flow:
+# 1. Does the codebase need async?
+#    - Yes → httpx or aiohttp
+#    - No → httpx or requests
+#
+# 2. Does it need HTTP/2?
+#    - Yes → httpx (only option with HTTP/2)
+#    - No → continue
+#
+# 3. Is dependency count a constraint?
+#    - Yes → stdlib urllib.request
+#    - No → continue
+#
+# 4. Sync or async?
+#    - Sync → requests (ubiquitous) or httpx (modern typing)
+#    - Async → httpx (sync+async) or aiohttp (async-only, server-side focus)
+```
+
+| Client | Sync | Async | HTTP/2 | Dependencies | Best for |
+|--------|------|-------|--------|--------------|----------|
+| `requests` | ✅ | ❌ | ❌ | 1 (urllib3) | Simple sync scripts, ubiquitous ecosystem |
+| `httpx` | ✅ | ✅ | ✅ | 2 (httpcore, certifi) | Modern apps needing async or HTTP/2 |
+| `aiohttp` | ❌ | ✅ | ❌ | 3 (aiohttp, yarl, multidict) | Async servers (client + server in one) |
+| `urllib.request` | ✅ | ❌ | ❌ | 0 (stdlib) | Zero-dependency scripts, constrained envs |
+
+## Testing
+
+**Why `respx` beats monkeypatching internals:** Mocking at the transport layer avoids implementation details, works with both sync and async clients, and doesn't break when httpx updates its internals.
+
+```python
+import httpx
+import respx
+import pytest
+
+@respx.mock
+def test_request_method_and_headers():
+    """Assert on request method, URL, and headers."""
+    route = respx.post("https://api.example.com/users").mock(
+        return_value=httpx.Response(201, json={"id": 123})
+    )
+
+    client = httpx.Client()
+    response = client.post(
+        "https://api.example.com/users",
+        json={"name": "Alice"},
+        headers={"X-Request-ID": "abc-123"}
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {"id": 123}
+
+    # Assert request was made correctly
+    assert route.called
+    request = route.calls[0].request
+    assert request.method == b"POST"
+    assert "X-Request-ID" in request.headers
+```
+
+**Testing retry behavior without wall-clock delay:**
+
+```python
+import httpx
+from httpx import MockTransport
+
+def test_retry_behavior():
+    """Test retry logic by injecting a failing transport."""
+    call_count = 0
+
+    def failing_transport(request):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise httpx.ConnectTimeout("Simulated timeout", request=request)
+        return httpx.Response(200, json={"success": True})
+
+    transport = MockTransport(failing_transport)
+    client = httpx.Client(transport=transport)
+
+    # Your retry logic should handle this
+    response = client.get("https://example.com")
+    assert response.json() == {"success": True}
+    assert call_count == 3  # Verified retry count
+```
+
+**Testing async with respx:**
+
+```python
+import pytest
+import httpx
+import respx
+
+@pytest.mark.asyncio
+async def test_async_client():
+    @respx.mock
+    async def inner():
+        route = respx.get("https://api.example.com/data").mock(
+            return_value=httpx.Response(200, json={"data": "test"})
         )
 
-# Sequential sync requests
-def fetch_all_sync(urls):
-    with httpx.Client() as client:
-        return [client.get(url).json() for url in urls]
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://api.example.com/data")
+            assert response.json() == {"data": "test"}
+            assert route.called
+
+    await inner()
 ```
 
-## Common Issues
+## Common Pitfalls
 
-### SSL Certificate Errors
+### Connection Leaks
 
 ```python
-# Issue: SSL certificate verification failed
-# Solution 1: Update certifi
-# pip install --upgrade certifi
+# Wrong: Client not closed
+client = httpx.Client()
+response = client.get("https://example.com")
+# Connection pool never cleaned up
 
-# Solution 2: Verify=False (not recommended for production)
-response = client.get("https://example.com", verify=False)
+# Correct: Context manager or explicit close
+with httpx.Client() as client:
+    response = client.get("https://example.com")
 
-# Solution 3: Custom CA
-response = client.get(
-    "https://example.com",
-    verify="/path/to/ca-bundle.crt"
-)
+# Or for long-lived clients
+client = httpx.Client()
+try:
+    response = client.get("https://example.com")
+finally:
+    client.close()
 ```
 
-### Connection Pool Exhaustion
+### Mixing Sync and Async
 
 ```python
-# Issue: Too many open connections
-# Solution: Use connection limits
-limits = httpx.Limits(
-    max_connections=50,
-    max_keepalive_connections=20
-)
-client = httpx.Client(limits=limits)
+# Wrong: Sync client in async function blocks event loop
+async def fetch():
+    with httpx.Client() as client:  # Blocks!
+        return client.get("https://example.com")
+
+# Correct: Use AsyncClient
+async def fetch():
+    async with httpx.AsyncClient() as client:
+        return await client.get("https://example.com")
 ```
 
-### Timeout Issues
+### Timeout Not Set
 
 ```python
-# Issue: Requests hanging forever
-# Solution: Always set timeouts
-timeout = httpx.Timeout(10.0, connect=5.0)
-response = client.get("https://api.example.com", timeout=timeout)
+# Wrong: No timeout—server can hang forever
+httpx.get("https://slow-server.com")
 
-# Or disable only for specific operations
-response = client.get(
-    "https://api.example.com/long-operation",
-    timeout=None  # No timeout
-)
+# Correct: Explicit timeout
+httpx.get("https://slow-server.com", timeout=httpx.Timeout(connect=5.0, read=30.0))
 ```
+
+## Deep Dives
+
+Load these reference files on demand when you need deeper coverage:
+
+- **Async patterns** — `references/async.md` — Concurrent requests, streaming uploads/downloads, event loop integration
+- **Advanced features** — `references/advanced.md` — HTTP/2 deep dive, proxy configuration, event hooks, custom transports
+- **Testing & framework integration** — `references/testing-integration.md` — FastAPI/Django integration, advanced respx patterns, async test fixtures
 
 ## References
 
 - **Official Documentation**: https://www.python-httpx.org/
 - **GitHub Repository**: https://github.com/encode/httpx
-- **HTTPX Discord**: https://discord.gg/q5B4fAT
-- **Stack Overflow**: https://stackoverflow.com/questions/tagged/httpx
-
-## Deep Dives
-
-The following reference files are loaded on demand from `../SKILL.md`:
-
-- **Async Client** — `references/async.md` — AsyncClient setup, concurrent requests, streaming uploads/downloads
-- **Advanced Features** — `references/advanced.md` — HTTP/2, connection pooling, retries, proxies, event hooks
-- **Testing & Integration** — `references/testing-integration.md` — httpx-mock, respx, async testing, FastAPI/Django integration
+- **HTTP/2 Specification**: https://httpwg.org/specs/rfc9113.html

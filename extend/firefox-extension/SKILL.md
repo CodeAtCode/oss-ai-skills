@@ -113,13 +113,21 @@ Firefox extensions use the WebExtensions API with the `browser.*` namespace (Pro
 
 ### MV2 vs MV3 Key Differences
 
-| Feature | MV2 | MV3 |
-|---------|-----|-----|
-| Toolbar button | `browser_action` | `action` |
-| Background | `background.scripts` / `page` | `background.service_worker` |
-| Host permissions | In `permissions` | Separate `host_permissions` |
-| Default CSP | `script-src 'self'; object-src 'self';` | `script-src 'self'; upgrade-insecure-requests;` |
-| Request blocking | `webRequest.onBeforeRequest` | `declarativeNetRequest` |
+| Feature | MV2 | MV3 | Firefox Version Notes |
+|---------|-----|-----|----------------------|
+| Toolbar button | `browser_action` | `action` | `action` available since Firefox 109+ |
+| Background | `background.scripts` / `page` | `background.service_worker` | Service workers since Firefox 109+; MV2 background pages still supported |
+| Host permissions | In `permissions` | Separate `host_permissions` | MV3 separation enforced from Firefox 109+ |
+| Default CSP | `script-src 'self'; object-src 'self';` | `script-src 'self'; upgrade-insecure-requests;` | CSP tightening in MV3 blocks inline scripts |
+| Request blocking | `webRequest.onBeforeRequest` | `declarativeNetRequest` | MV3: `webRequest` is non-blocking only; blocking requires `declarativeNetRequest` (rule limits apply) |
+| **MV3 availability** | N/A | Supported | Firefox 109+ (ESR 115+) — verify against MDN for ESR boundaries |
+| **MV2 deprecation** | Active | N/A | Firefox has NOT deprecated MV2 (unlike Chrome); verify current status on MDN |
+
+**MV3 forces these practical changes:**
+- No remote code: all logic must be bundled; no `eval()`, no dynamic `import()` from network
+- `background.scripts` → `background.service_worker` (event-driven, ephemeral)
+- CSP tightening: inline scripts (`onclick="..."`) blocked; move to event listeners
+- `webRequest` blocking → `declarativeNetRequest` (max 30,000 rules, 5,000 dynamic rules)
 
 ### All Manifest Keys Reference
 
@@ -155,6 +163,22 @@ Firefox extensions use the WebExtensions API with the `browser.*` namespace (Pro
 - `host_permissions` (MV3) - Host access
 - `optional_permissions` - Optional API permissions
 - `optional_host_permissions` - Optional host access
+
+### Permissions Justification Discipline
+
+High-risk permissions trigger AMO reviewer scrutiny. Document the narrowest alternative:
+
+| Permission | What it grants | Narrower alternative |
+|------------|----------------|---------------------|
+| `<all_urls>` | Access to every website | Specific host patterns (`https://*.example.com/*`) |
+| `webRequest` | Inspect/modify all network traffic | `declarativeNetRequest` for static rules; limit scope with host_permissions |
+| `cookies` | Read/write all cookies | `host_permissions` for specific domains; justify in AMO submission |
+| `debugger` | Attach debugger to any tab | Rarely justified; consider `devtools` API instead |
+| `tabs` | Read all tab metadata | `activeTab` for on-demand access; `scripting` API for content injection |
+| `bookmarks` | Read/modify all bookmarks | None — justify necessity in AMO notes |
+| `history` | Read browsing history | None — AMO requires strong justification |
+
+**AMO review trigger:** Permission justification must appear in the extension listing description or AMO notes. Vague justifications lead to rejection.
 
 **Other:**
 - `commands` - Keyboard shortcuts
@@ -311,6 +335,58 @@ my-extension/
 ├── package.json
 └── README.md
 ```
+
+## AMO Submission & Review
+
+**Official references:**
+- [AMO Review Guidelines](https://reviewers.addons.mozilla.org/)
+- [Distribution Policy](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/AMO/Policy)
+- [Rejection Guidelines](https://extensionworkshop.com/documentation/publish/add-on-policies/)
+
+### Automatic Rejection Triggers
+
+These issues cause immediate automated or quick human rejection:
+
+| Issue | Fix |
+|-------|-----||
+| Missing `browser_specific_settings.gecko.id` | Add unique UUID or email-based ID |
+| Data collection disclosure missing | Add `data_collection` field in manifest or privacy policy URL |
+| Homepage/source URL 404s | Verify URLs before submission; use permanent links |
+| Icon fails size rules | Provide 48x48 and 96x96 PNGs; no transparency issues |
+| Description reads as keyword spam | Write natural description; avoid stuffed keywords |
+| Missing permission justification | Document permission usage in AMO notes |
+
+### Human Reviewer Flags
+
+Reviewers manually check for these red flags:
+
+- **Remote code execution:** Any `eval()`, `new Function()`, dynamic script loading from network
+- **Overbroad host permissions:** `<all_urls>` without clear justification
+- **Data collection beyond declared purpose:** Privacy policy must match actual behavior
+- **Hidden functionality:** Code paths not disclosed in listing
+- **Obfuscated code:** Minification ok; obfuscation triggers source code request
+
+### Review Timeline & Response
+
+- **Automated validation:** 5-15 minutes
+- **Human review (listed):** 1-7 days
+- **Human review (unlisted):** Faster, often same-day
+
+**When rejected:**
+1. Read reviewer notes carefully (found in Developer Hub)
+2. Fix the specific issue; don't resubmit without changes
+3. Add clarifying notes if the rejection was a misunderstanding
+4. Resubmit within 30 days to keep the review queue position
+
+### Data Collection Disclosure
+
+If your extension collects/transmits user data, you MUST:
+- Add a privacy policy URL in the manifest (`homepage_url` or dedicated field)
+- Disclose what data is collected, how, and why
+- Implement user consent before collection
+- Declare data retention policy
+
+See `references/testing-amo.md` for the full AMO checklist.
 
 ## Deep Dives
 
