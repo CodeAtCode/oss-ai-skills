@@ -497,9 +497,10 @@ def test_config():
 
 For detailed coverage of these topics, load the corresponding reference files:
 
-- **Async Testing & Django** — `references/plugins-async-django.md`: pytest-asyncio, pytest-django, async Django patterns, sync_to_async bridge, common pitfalls
-- **Tooling Plugins** — `references/plugins-tooling.md`: pytest-cov (coverage), pytest-mock (mocking), pytest-xdist (parallel), pytest-timeout, pytest-env, pytest-randomly, pytest-sugar, pytest-clarity, pytest-benchmark
-- **Mocking & CI** — `references/mocking-ci.md`: unittest.mock patterns, monkeypatch, GitHub Actions, GitLab CI, pdb debugging
+- **Async Testing & Django** — `references/plugins-async-django.md`: pytest-asyncio, pytest-django, async patterns, sync_to_async bridge
+- **Tooling Plugins** — `references/plugins-tooling.md`: pytest-cov (coverage), pytest-mock, pytest-xdist, pytest-timeout
+- **Mocking & CI** — `references/mocking-ci.md`: unittest.mock patterns, monkeypatch, CI/CD integration
+- **Mutation Testing** — `references/mutation-testing.md`: mutmut workflow, when tests don't assert anything, fork hazards — load when verifying assertion quality beyond coverage
 
 ## Best Practices
 
@@ -563,14 +564,13 @@ def test_user_creation():
 ### 4. One Assertion Per Test (When Possible)
 
 ```python
-# Bad
+# Bad — multiple assertions hide which check failed
 def test_user():
     user = create_user()
     assert user.username == "test"
     assert user.email == "test@example.com"
-    assert user.is_active is True
 
-# Good
+# Good — clear failure messages
 def test_user_has_correct_username():
     user = create_user()
     assert user.username == "test"
@@ -578,11 +578,11 @@ def test_user_has_correct_username():
 def test_user_has_correct_email():
     user = create_user()
     assert user.email == "test@example.com"
-
-def test_user_is_active_by_default():
-    user = create_user()
-    assert user.is_active is True
 ```
+
+## Mutation Testing
+
+Coverage tells you which lines ran; mutation testing tells you if your tests would notice if those lines were wrong. Run `mutmut run` to mutate code and verify tests catch the changes, then `mutmut browse` to review survivors. A high-coverage suite with weak assertions scores badly here — see `references/mutation-testing.md` for the full workflow.
 
 ## References
 

@@ -2101,3 +2101,231 @@ mod tests {
 - [test-cfg-test-module](#test-cfg-test-module) - Test module structure
 - [test-integration-dir](#test-integration-dir) - Integration tests
 - [proj-pub-crate-internal](#proj-pub-crate-internal) - Visibility modifiers
+
+
+## test-mutation-assertions
+
+> Use mutation testing to verify tests actually assert behavior, not just coverage
+
+### Why It Matters
+
+Code coverage tells you what code a test *reaches*; mutation testing tells you whether the test actually *asserts* anything about the behavior. A test can cover 100% of a function but still pass if the function returns the wrong value. Mutation testing catches this by automatically modifying code and verifying tests fail.
+
+### Tool: cargo-mutants
+
+Install the tool:
+
+```bash
+cargo install cargo-mutants
+```
+
+Run from your crate directory:
+
+```bash
+cargo mutants              # Run mutation testing
+cargo mutants --list       # See mutants without running
+cargo mutants --list --diff  # Show actual mutations
+```
+
+### Outcomes
+
+| Outcome | Meaning | Action |
+|---------|---------|--------|
+| **caught** | A test failed with the mutant applied | Good — test is effective |
+| **not caught** | No test failed | Coverage gap OR equivalent mutant |
+| **check failed** | Mutation doesn't typecheck | Inconclusive — no action needed |
+| **build failed** | Build broke (rare) | Usually indicates mutation too broad |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|--------|
+| 0 | Success — no uncovered mutants |
+| 1 | Usage error |
+| 2 | Found mutants not covered by tests |
+| 3 | Some tests timed out (mutation caused infinite loop) |
+| 4 | Tests already failing in clean tree — fix suite first |
+
+**Exit code 4 is not a mutation problem** — it means your test suite is broken before mutation testing begins. Fix the failing tests before interpreting mutation results.
+
+### Generic Example
+
+```rust
+// src/math.rs
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b  // Mutant: replaces with a * b, a - b, 0, etc.
+}
+
+pub fn divide(a: i32, b: i32) -> Option<i32> {
+    if b == 0 { None } else { Some(a / b) }
+    // Mutant: removes the b == 0 check
+}
+```
+
+```bash
+# List mutants before committing to full run
+cargo mutants --list
+
+# Run mutation testing
+cargo mutants
+
+# Check exit code in CI
+# 0 = all mutants caught (good)
+# 2 = some mutants survived (review coverage)
+```
+
+### Interpreting Results
+
+```
+ mutants found: 42
+   caught: 38    ← Good — tests detected the mutations
+not caught: 4     ← Review: either add tests or mark as equivalent
+```
+
+For "not caught" mutants:
+- If the mutation changes behavior but tests still pass → **add tests**
+- If the mutation is semantically equivalent (e.g., `x + 0` → `x`) → **acceptable false positive**
+
+### See Also
+
+- [test-arrange-act-assert](#test-arrange-act-assert) - Test structure for clear assertions
+- [test-descriptive-names](#test-descriptive-names) - Naming tests to show what they assert
+- [test-proptest-properties](#test-proptest-properties) - Property testing complements mutation
+
+
+## test-mutation-trustworthiness
+
+> Make mutation testing runs trustworthy and affordable
+
+### Why It Matters
+
+Mutation testing modifies and runs machine-generated code. Without proper safeguards, you risk running dangerous side effects, wasting hours on false positives, or trusting outdated tool behavior. This rule covers the patterns that make mutation testing reliable.
+
+### Safety First
+
+**Warning:** `cargo-mutants` builds and runs machine-modified code. If your test suite has side effects (writing/deleting files, network calls), run in a restricted or disposable environment.
+
+```bash
+# Use a clean temp directory
+cp -r my-project /tmp/mut-test
+cd /tmp/mut-test
+cargo mutants
+
+# Or use Docker for isolation
+docker run --rm -v $(pwd):/app rust:latest \
+  sh -c "cd /app && cargo install cargo-mutants && cargo mutants"
+```
+
+### Deliberate Exclusions
+
+Some functions are hard to mutate or generate noise. Use the `mutants` crate to skip them deliberately:
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+mutants = "0.0.3"  # Tiny, no effect on compiled code
+```
+
+```rust
+use mutants::skip;
+
+#[mutants::skip]
+pub fn already_well_tested(x: i32) -> i32 {
+    x + 1  // Too many trivial mutants
+}
+
+#[mutants::skip]
+pub fn external_call() -> Result<(), Error> {
+    // Can't mutate external API meaningfully
+    external_sdk::call()
+}
+```
+
+### Reduce "check failed" Noise
+
+Don't statically deny warnings while running mutation testing — mutated code will fail to build for uninteresting reasons:
+
+```toml
+# ❌ Don't do this in Cargo.toml
+[lints]
+rust.unused = "deny"  # Mutated code often has unused params
+```
+
+Instead, set lints through `RUSTFLAGS` when you want them, not during mutation runs:
+
+```bash
+# Set lints for normal builds
+RUSTFLAGS="-D unused" cargo build
+
+# Run mutation testing without lint denials
+cargo mutants
+```
+
+### Cargo.toml Path Trap
+
+`cargo-mutants` assumes source lives under `src/`. If your `Cargo.toml` uses relative `path` dependencies outside subdirectories, copying the tree fails:
+
+```toml
+# ❌ This breaks mutation testing
+dep = { path = "../shared" }  # Outside the copied tree
+```
+
+**Workaround:** Make paths absolute before running:
+
+```bash
+# Temporarily fix paths
+cargo tree --format '{p} {p.path}' > deps.txt
+# Edit Cargo.toml to use absolute paths
+cargo mutants
+# Restore original
+```
+
+### Version Pinning
+
+`cargo-mutants` is alpha software. Output formats and CLI syntax may change between releases:
+
+```toml
+# Pin the version to avoid surprises
+[dev-dependencies]
+mutants = "=0.0.3"  # Exact version
+```
+
+Before upgrading, re-read the changelog to check for breaking changes in output format or CLI syntax.
+
+### Performance Tips
+
+Mutation testing runs many builds. Speed up the base build process:
+
+```toml
+# Cargo.toml
+[profile.dev]
+opt-level = 1  # Faster compile, still debuggable
+
+[profile.test]
+opt-level = 1  # Faster test builds
+```
+
+On Linux, use the Mold linker for faster incremental builds:
+
+```bash
+# Install mold
+apt install mold
+
+# Use for builds
+RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo mutants
+```
+
+### Limitations to Know
+
+| Limitation | Impact | Mitigation |
+|------------|--------|------------|
+| Whole-function replacement only | Can't test fine-grained changes | Accept coarser granularity |
+| No `#[cfg(...)]` filtering | Generates mutants for inactive platforms | Run on target platform only |
+| No `unsafe` skipping | Mutates unsafe code | Review unsafe mutants carefully |
+| False positives on complex types | "check failed" results | Ignore build failures |
+
+### See Also
+
+- [test-mutation-assertions](#test-mutation-assertions) - Understanding mutation outcomes
+- [test-criterion-bench](#test-criterion-bench) - Build speed affects mutation runtime
+- [lint-deny-correctness](#lint-deny-correctness) - Lint configuration

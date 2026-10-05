@@ -240,6 +240,8 @@ Detailed rules live in `rules/` — 14 files, one per prefix group (`ownership.m
 | `test-should-panic` | Use `#[should_panic]` for panic tests |
 | `test-criterion-bench` | Use `criterion` for benchmarking |
 | `test-doctest-examples` | Keep doc examples as executable tests |
+| `test-mutation-assertions` | Use mutation testing to verify test assertions |
+| `test-mutation-trustworthiness` | Make mutation runs trustworthy and affordable |
 
 ### Documentation (`doc-`)
 

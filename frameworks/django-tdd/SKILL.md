@@ -463,6 +463,72 @@ invoice.issued_at = some_time
 invoice.save()
 ```
 
+## Mutation Testing for Django
+
+Use mutation testing to verify your tests actually catch logic errors. mutmut is the standard tool for Python.
+
+https://mutmut.readthedocs.io/en/latest/
+
+### Django-Specific Friction Points
+
+**Test-database cost dominates the run.** Every mutant reruns pytest; a Django suite recreates or reuses a test database and re-runs migrations. Mitigations:
+
+- Reuse the database: `--reuse-db` for pytest-django or `keepdb=True` for `create_test_db`
+- Prefer `TestCase` over `TransactionTestCase` outside the few tests that genuinely need real transactions — `TransactionTestCase` flushes after each test, recreating content types and permissions per model. Cost grows with model count.
+
+**The DEBUG blind spot.** `DiscoverRunner` takes `debug_mode=False` and its `setup_test_environment()` sets `DEBUG` to `self.debug_mode`, which defaults to False. Therefore code guarded by `if settings.DEBUG:` never executes under the test runner unless the runner is given `debug_mode=True` (the `--debug-mode` test flag).
+
+Consequence: mutants inside debug-only branches survive for a structural reason, not a test-quality reason. The whole branch is effectively untested. Two honest options:
+
+1. Run the runner with `debug_mode=True` for that subset
+2. Exclude the branches with `# pragma: no mutate` and accept they are manually tested
+
+Do not present this as a fix — it is a blind spot you must consciously choose about.
+
+**Mocking defeats mutation detection.** A test that patches the very function under test, or asserts only on a mocked call, will not fail when the real logic is mutated — the mutant survives even though the test "covers" the line. This is the sharpest reason coverage and mutation disagree so sharply on Django codebases. Connect this to the mocking-pitfalls section above.
+
+**Fork isolation with a database in play.** Mutmut's default `process_isolation="fork"` means each mutant worker inherits the pytest session's state, including open DB connections. The docs give `forkserver` as the fix for hangs, segfaults, or irreproducible results. Name that as the first thing to try when a Django mutation run hangs.
+
+**Sequencing with `--parallel`.** Each parallel worker needs its own database; a suite that shares a resource must use `django.test.testcases.SerializeMixin` rather than assuming parallel safety.
+
+### Running mutmut
+
+```bash
+# Install
+pip install mutmut
+
+# Configure in pyproject.toml
+[tool.mutmut]
+source_paths = ["apps"]
+pytest_add_cli_args = ["--reuse-db", "--nomigrations"]
+
+# Run mutations (scans tests/ folder by default)
+mutmut run
+
+# Browse survivors in TUI
+mutmut browse
+
+# Scope to a module or function
+mutmut run "my_module*"
+mutmut run "my_module.my_function*"
+
+# Apply a mutant to disk (commit first)
+mutmut apply <mutant>
+```
+
+**Pragmas** — exclude code from mutation:
+
+```python
+# pragma: no mutate
+# pragma: no mutate block  # or: # pragma: no mutate: block
+# pragma: no mutate start
+# pragma: no mutate end
+```
+
+**State:** mutmut stores results in `mutants/`; delete it for a full re-run. Cost model: mutmut runs only the tests relevant to the mutated function, not the whole suite.
+
+**Note:** mutmut 3 mutates only inside functions; the docs point to mutmut 2 for code outside functions.
+
 ## Quick Reference
 
 | Pattern | Usage |
