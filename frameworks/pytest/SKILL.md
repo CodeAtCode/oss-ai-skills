@@ -1,6 +1,6 @@
 ---
 name: pytest
-description: Use when writing Python tests with pytest - fixtures, parametrization, markers, conftest layout, pytest-asyncio, pytest-django, coverage with pytest-cov, mocking with pytest-mock, parallel runs with xdist, or CI integration
+description: Use when writing Python tests with pytest - fixtures, parametrization, markers, conftest layout, pytest-asyncio, pytest-django, coverage with pytest-cov, mocking with pytest-mock, parallel runs with xdist, mutation testing with mutmut, or CI integration
 metadata:
   author: mte90
   version: 3.0.0
@@ -500,7 +500,8 @@ For detailed coverage of these topics, load the corresponding reference files:
 - **Async Testing & Django** — `references/plugins-async-django.md`: pytest-asyncio, pytest-django, async patterns, sync_to_async bridge
 - **Tooling Plugins** — `references/plugins-tooling.md`: pytest-cov (coverage), pytest-mock, pytest-xdist, pytest-timeout
 - **Mocking & CI** — `references/mocking-ci.md`: unittest.mock patterns, monkeypatch, CI/CD integration
-- **Mutation Testing** — `references/mutation-testing.md`: mutmut workflow, when tests don't assert anything, fork hazards — load when verifying assertion quality beyond coverage
+- **Mutation Testing** — `references/mutation-testing.md`: mutmut workflow, cargo-mutants, Stryker, when tests don't assert anything, fork hazards — load when verifying assertion quality beyond coverage
+- **Property-Based Testing** — `references/property-based-testing.md`: Hypothesis @given + strategies, deadline/max_examples/profiles, shrinking-to-@example workflow — load when testing parsers, roundtrips, or invariants over generated inputs
 
 ## Best Practices
 
@@ -561,24 +562,25 @@ def test_user_creation():
     assert user.check_password("password123")
 ```
 
-### 4. One Assertion Per Test (When Possible)
+### 4. One Behavior Per Test
+
+Each test verifies one behavior — that is not "one assertion": multiple assertions on the SAME behavior are fine and often clearer than splitting.
 
 ```python
-# Bad — multiple assertions hide which check failed
-def test_user():
-    user = create_user()
+# Good — all assertions verify one behavior: create_user persisted each field
+def test_create_user_persists_fields():
+    user = create_user(username="test", email="test@example.com")
     assert user.username == "test"
     assert user.email == "test@example.com"
 
-# Good — clear failure messages
-def test_user_has_correct_username():
+# Bad — two different behaviors in one test; a failure doesn't say which broke
+def test_user_and_password():
     user = create_user()
     assert user.username == "test"
-
-def test_user_has_correct_email():
-    user = create_user()
-    assert user.email == "test@example.com"
+    assert user.check_password("password123")
 ```
+
+Split into separate tests when behaviors differ. The real driver is setup cost: duplicating expensive setup across near-identical tests is worse than a second assertion on the same behavior — share setup with fixtures instead of merging unrelated behaviors into one test.
 
 ## Mutation Testing
 

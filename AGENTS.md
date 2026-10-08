@@ -5,9 +5,9 @@ Rules for creating and maintaining skills in this repository. Read this before e
 ## Repository layout
 
 - `frameworks/` — library and framework skills (django, ratatui, pytest, sqlalchemy, …)
-- `languages/` — language-level skills (rust-common-pitfalls)
-- `tools/` — CLI tool skills
-- `extend/` — plugin and extension skills (firefox-extension, opencode, zed-editor, …)
+- `languages/` — language-level skills (rust-core)
+- `tool/` — CLI tool skills (ast-grep, redis, waydroid)
+- `extend/` — plugin and extension skills (firefox-extension, opencode, …)
 - Skill directories use kebab-case. One skill per directory.
 - `README.md` must stay in sync: one row per skill with trigger-style description, current line count, and tags. Hub skills list sub-skills with `↳` indentation.
 
@@ -15,7 +15,7 @@ Rules for creating and maintaining skills in this repository. Read this before e
 
 Every `SKILL.md` must follow the frontmatter syntax documented in the README ("Skill Format" section), per the [skillreg.dev specification](https://skillreg.dev/docs/skill-md-reference):
 
-- `name` — kebab-case, must match the parent directory name
+- `name` — kebab-case, must match the parent directory name (exception: `frameworks/pyqt/` sub-skills predate this rule and keep their `pyqt-*` names; the linter allowlists them)
 - `description` — trigger-focused, one line (see writing rules below)
 - `metadata.author` — the maintainer name
 - `metadata.version` — semver string, bumped on content changes, never downgraded

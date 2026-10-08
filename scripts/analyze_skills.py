@@ -3,7 +3,7 @@
 import argparse, os, re, yaml, subprocess, socket, time, json
 from pathlib import Path
 
-SKILL_DIRS = ["contribute", "extend", "frameworks", "languages", "tool"]
+SKILL_DIRS = ["extend", "frameworks", "languages", "tool"]
 SKILL_FILE = "SKILL.md"
 
 def parse_ndjson_response(output: str) -> str:

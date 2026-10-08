@@ -1,3 +1,5 @@
+This file is loaded on demand from ../SKILL.md.
+
 # Advanced State Management
 
 ## Model-View-Update (MVU/Elm Architecture)

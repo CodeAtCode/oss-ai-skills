@@ -145,15 +145,14 @@ def test_wait_signal(qtbot):
     # Check signal argument
     assert blocker.args == ["Done"]
 
-def test_wait_multiple_signals(qtbot):
-    """Wait for multiple signal emissions."""
+def test_wait_signal_raising(qtbot):
+    """raising is a bool: raise AssertionError on timeout instead of returning silently."""
     timer = QTimer()
     timer.setInterval(100)
-    
-    # Wait for 3 emissions
-    with qtbot.waitSignal(timer.timeout, timeout=500, raising=3):
+
+    with qtbot.waitSignal(timer.timeout, timeout=500, raising=True):
         timer.start()
-    
+
     timer.stop()
 
 def test_wait_signals_any(qtbot):
@@ -456,6 +455,110 @@ def dump_widgets(widget, indent=0):
     for child in widget.findChildren(QObject):
         dump_widgets(child, indent + 2)
 ```
+
+## Testing Logic Without QApplication: the Presenter Pattern
+
+Business logic inside QWidget slots needs a QApplication, an event loop, and widget plumbing to test. Extract decisions into a plain presenter class and keep slots as one-line delegations that only render presenter state. Models follow the same rule (see Testing Model/View above): keep QAbstractItemModel subclasses thin over plain data.
+
+pytest instantiates fixtures only when a test requests them, so a presenter unit test that imports no Qt module and never requests qtbot or qapp runs with no QApplication at all. Source: https://pytest-qt.readthedocs.io/en/latest/reference.html#pytestqt.plugin.qapp
+
+```python
+# presenters.py - plain Python, no Qt imports
+class CartPresenter:
+    """Decisions live here; the widget only renders presenter state."""
+
+    def __init__(self, max_items=5):
+        self.items = []
+        self.max_items = max_items
+
+    def add(self, name, price):
+        if len(self.items) >= self.max_items:
+            raise ValueError(f"cart full: max {self.max_items} items")
+        self.items.append((name, price))
+        return len(self.items)
+
+    @property
+    def total(self):
+        return sum(price for _, price in self.items)
+```
+
+```python
+# test_presenters.py - unit test with no QApplication, event loop, or qtbot
+import pytest
+
+from presenters import CartPresenter
+
+
+def test_add_rejects_full_cart():
+    presenter = CartPresenter(max_items=2)
+    presenter.add("apple", 1.0)
+    presenter.add("pear", 2.0)
+    with pytest.raises(ValueError, match="cart full: max 2 items"):
+        presenter.add("fig", 3.0)
+    assert presenter.total == 3.0
+```
+
+```python
+# cart_widget.py - the slot only delegates and renders
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+
+from presenters import CartPresenter
+
+
+class CartWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.presenter = CartPresenter()
+        self.status = QLabel("empty")
+        add_button = QPushButton("Add")
+        add_button.clicked.connect(self._on_add_clicked)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.status)
+        layout.addWidget(add_button)
+
+    def _on_add_clicked(self):
+        try:
+            count = self.presenter.add("item", 1.0)
+        except ValueError as err:
+            self.status.setText(str(err))
+            return
+        self.status.setText(f"{count} items, total {self.presenter.total:.2f}")
+```
+
+With this split, a qtbot integration test only asserts the rendering glue (`widget.status.text()`), never the rules: the presenter unit test already covers those.
+
+## Mutation Testing for Qt Apps
+
+Mutation testing mutates source lines and re-runs the suite; a surviving mutant means no assertion noticed the change. For Qt apps, mutate only non-UI logic (the presenters and models above) and exclude widget and slot code.
+
+- Scope runs to presenter/model modules: `[tool.mutmut]` with `only_mutate = ["myapp/presenters.py"]`, `do_not_mutate` for widget modules, or `# pragma: no mutate` on a widget class.
+- Slot bodies are hostile to mutation runs: mutmut re-runs the covered tests per mutant in forked workers, so a mutant inside a slot pays the full UI lifecycle cost every time. QApplication startup, window mapping/exposure (asynchronous on X11), every `qtbot.wait*` call spending its timeout budget, widget teardown; hundreds of UI tests multiply that cost across thousands of mutants.
+- Slot mutations are also noisy: label text, tooltips, and margins are cosmetic, nothing should assert them, so they survive as equivalent mutants and bury real gaps.
+- Qt-specific fork hazard: the `qapp` fixture leaves a live QApplication in the pytest process and every forked mutant worker inherits it. If mutant runs hang or segfault, switch mutmut to `process_isolation = "forkserver"`.
+
+Tool mechanics, configuration reference, and equivalent-mutant triage: see [frameworks/pytest/references/mutation-testing.md](../../pytest/references/mutation-testing.md).
+
+## Exact-State Assertions vs Screenshot Oracles
+
+Assert the exact widget/model state that encodes the behavior. A screenshot is a visual oracle, never a logic oracle.
+
+- Read state through accessors and assert exact values: `line_edit.text()`, `checkbox.isChecked()`, `spin.value()`, `combo.currentText()`, `model.data(model.index(0, 0), Qt.ItemDataRole.DisplayRole)`. Exact equality beats `is not None` and truthiness checks.
+- Reach state through widget setters when input handling is not the subject: the pytest-qt docs note that `QComboBox.setCurrentText`, `QLineEdit.setText`, and similar widget methods have the same effect as user interaction but are more reliable than the raw QTest-style calls; keep `qtbot.mouseClick`/`qtbot.keyClicks` for tests about the input handling itself. Source: https://pytest-qt.readthedocs.io/en/latest/reference.html
+- For state updated asynchronously (worker thread, queued signal), poll with `qtbot.waitUntil(callback, timeout=5000)` (v2.0+): in assert form the callback raises AssertionError until the state holds; in lambda form it returns True/False (any other return raises ValueError). Source: https://pytest-qt.readthedocs.io/en/latest/reference.html#pytestqt.qtbot.QtBot.waitUntil
+
+```python
+def test_async_status(qtbot):
+    widget = StatusWidget()
+    qtbot.addWidget(widget)
+
+    widget.start_job()  # worker thread updates the label when done
+
+    qtbot.waitUntil(lambda: widget.status.text() == "done", timeout=2000)
+    assert widget.status.text() == "done"
+    assert widget.presenter.ok_count == 1
+```
+
+`qtbot.screenshot(widget)` (v4.1+) saves a PNG under pytest's tmp_path and returns its `pathlib.Path`: a visual oracle for review or regression comparison. It cannot assert presenter state or model rows; passing pixels can coexist with broken logic. Source: https://pytest-qt.readthedocs.io/en/latest/reference.html#pytestqt.qtbot.QtBot.screenshot
 
 ## References
 

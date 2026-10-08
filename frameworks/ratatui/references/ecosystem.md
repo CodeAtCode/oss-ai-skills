@@ -1,3 +1,5 @@
+This file is loaded on demand from ../SKILL.md.
+
 # Ecosystem Libraries
 
 ## tachyonfx

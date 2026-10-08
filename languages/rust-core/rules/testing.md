@@ -2223,7 +2223,7 @@ Some functions are hard to mutate or generate noise. Use the `mutants` crate to 
 ```toml
 # Cargo.toml
 [dev-dependencies]
-mutants = "0.0.3"  # Tiny, no effect on compiled code
+mutants = "0.0.4"  # Tiny, no effect on compiled code
 ```
 
 ```rust
@@ -2280,17 +2280,15 @@ cargo mutants
 # Restore original
 ```
 
-### Version Pinning
+### Version Awareness
 
-`cargo-mutants` is alpha software. Output formats and CLI syntax may change between releases:
+`cargo-mutants` is stable and actively maintained (CalVer releases). The tool still evolves, so:
 
-```toml
-# Pin the version to avoid surprises
-[dev-dependencies]
-mutants = "=0.0.3"  # Exact version
-```
+- Pin the binary version in CI (`cargo install --locked cargo-mutants`) to keep mutation runs reproducible.
+- Pin the helper crate with a normal caret requirement — `mutants = "0.0.4"`; no exact pin is needed, the `#[mutants::skip]` attribute is stable.
+- Skim the [NEWS.md](https://github.com/sourcefrog/cargo-mutants/blob/main/NEWS.md) changelog before upgrading for output-format or CLI changes.
 
-Before upgrading, re-read the changelog to check for breaking changes in output format or CLI syntax.
+Sources: [cargo-mutants README](https://github.com/sourcefrog/cargo-mutants), [crates.io](https://crates.io/crates/cargo-mutants)
 
 ### Performance Tips
 
@@ -2319,7 +2317,7 @@ RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo mutants
 
 | Limitation | Impact | Mitigation |
 |------------|--------|------------|
-| Whole-function replacement only | Can't test fine-grained changes | Accept coarser granularity |
+| Fine-grained mutants multiply run time (sub-function mutations, v23.12+) | More mutants per run | Scope with `--file`/`--exclude`/`--re`; see [test-mutation-runtime-budget](#test-mutation-runtime-budget) |
 | No `#[cfg(...)]` filtering | Generates mutants for inactive platforms | Run on target platform only |
 | No `unsafe` skipping | Mutates unsafe code | Review unsafe mutants carefully |
 | False positives on complex types | "check failed" results | Ignore build failures |
@@ -2329,3 +2327,48 @@ RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo mutants
 - [test-mutation-assertions](#test-mutation-assertions) - Understanding mutation outcomes
 - [test-criterion-bench](#test-criterion-bench) - Build speed affects mutation runtime
 - [lint-deny-correctness](#lint-deny-correctness) - Lint configuration
+
+## test-mutation-runtime-budget
+
+> Keep mutation testing runs fast enough to run on every change
+
+### Why It Matters
+
+A full mutation run multiplies your test suite by the number of mutants. An unscoped run on a large crate can take hours — and mutation testing that never runs protects nothing. Budget the run so it fits the change you are testing.
+
+### Scope the Mutant Set
+
+Run mutants only for the code you touched:
+
+```bash
+cargo mutants -f src/parser.rs               # One file
+cargo mutants --exclude-re "tests/|benches/" # Skip noise directories
+cargo mutants --re "payment|invoice"         # Only items matching a regex
+```
+
+Review the exact mutations before committing to a full run:
+
+```bash
+cargo mutants --list --diff
+```
+
+### Budget the Time
+
+| Control | Flags | Use |
+|---------|-------|-----|
+| Per-mutant timeout | `--timeout`, `--minimum-test-timeout` | Stop hung mutants; raise the floor for slow suites |
+| Timeout scaling | `--timeout-multiplier` | Scale the budget to your baseline test time |
+| Parallelism | `--jobs` | Trade idle cores for wall-clock time |
+
+`--in-place` runs mutants in the source tree itself instead of a copy — the recommended setup in CI, but run it only from a clean checkout. Results are written as machine-readable JSON (`mutants.json` / `outcomes.json`): parse those in scripts instead of scraping stdout.
+
+### Survivors Drive Property Tests
+
+A surviving mutant points at a missing assertion; a cluster of survivors in parsing or validation code points at a missing property. When survivors cluster, write a `proptest` for that invariant — one property kills an entire class of mutants. Conversely, a shrinking `proptest` failure is a ready-made mutation oracle: reduce it to a plain failing test and every mutant in that code path gets caught.
+
+### See Also
+
+- [test-mutation-assertions](#test-mutation-assertions) - Understanding mutation outcomes
+- [test-proptest-properties](#test-proptest-properties) - Property testing that kills mutant classes
+- [test-mutation-trustworthiness](#test-mutation-trustworthiness) - Safe and trustworthy runs
+- Mutation tool mechanics across languages (mutmut, cargo-mutants, Stryker): [frameworks/pytest/references/mutation-testing.md](../../../frameworks/pytest/references/mutation-testing.md)

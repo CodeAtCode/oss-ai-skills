@@ -1,4 +1,4 @@
-# Loaded on demand from ../SKILL.md — mutation testing with mutmut to verify tests actually assert something.
+# Loaded on demand from ../SKILL.md — mutation testing (mutmut, cargo-mutants, Stryker) to verify tests actually assert something.
 
 Source: https://mutmut.readthedocs.io/en/latest/
 
@@ -8,6 +8,14 @@ Source: https://mutmut.readthedocs.io/en/latest/
 **Mutation testing says:** "If this line were wrong, would a test notice?"
 
 A high-coverage suite with weak assertions (e.g., no real value checks, just `assert result is not None`) scores badly on mutation testing. Coverage measures execution; mutation testing measures assertion quality.
+
+## Choose Your Tool
+
+| Language | Tool | Notes |
+| --- | --- | --- |
+| Python | mutmut | Full workflow in the rest of this file |
+| Rust | cargo-mutants | See "cargo-mutants (Rust)" below |
+| JavaScript/TypeScript | Stryker | See "Stryker (JavaScript/TypeScript)" below |
 
 ## The mutmut Workflow
 
@@ -125,6 +133,14 @@ With the default `fork`, every mutant worker inherits whatever the pytest sessio
 2. Or an equivalent mutant → exclude with pragma/config
 3. Record the decision
 
+## Survivor Decision Log
+
+Record survivors you choose to keep (equivalent, or not worth killing) in a `mutation-decisions.md` file in the skill directory — one line each: mutant id or name, reason (`equivalent`, `untestable`, or `cost`), date, and the exclusion or pragma covering it. The repo linter enforces this format when the file exists:
+
+```text
+- format_isqrt_equivalent — equivalent — 2026-10-08 — `--re "isqrt"` scoped out: pure math identity
+```
+
 ## CI Reality
 
 **Full runs are expensive.** Run on a schedule or on changed paths, not every push:
@@ -188,3 +204,47 @@ source_paths = src
 mutate_only_covered_lines = true
 max_stack_depth = 3
 ```
+
+## cargo-mutants (Rust)
+
+Sources: https://github.com/sourcefrog/cargo-mutants and https://mutants.rs/ci.html — full guide at https://mutants.rs
+
+Stable and actively maintained (CalVer releases; v27.1.0 as of 2026-10). Quick start: run `cargo mutants` at the workspace root; to mutate one file only, `-f src/something.rs`.
+
+```bash
+cargo mutants                 # Generate and test mutants
+cargo mutants -f src/parse.rs # Scope to a single file
+cargo mutants --list --diff   # Preview mutant diffs without running tests
+cargo mutants --jobs 4        # Parallel mutant testing
+```
+
+Selection: `--file` / `--exclude` take paths, `--re` / `--exclude-re` take regexes. Skip a function or module in source with `#[mutants::skip]`.
+
+Timeouts: `--timeout`, `--timeout-multiplier`, `--minimum-test-timeout` control when a mutant is declared to hang the tests instead of failing them.
+
+Results land in machine-readable JSON — `mutants.json` (the run summary) and `outcomes.json` (per-mutant outcomes) — so CI can diff scores over time.
+
+CI: cargo-mutants recommends `--in-place` (mutate the checkout directly instead of copying the tree), and annotation output via `--annotations=github` (or `--annotations=none` to disable). Works with plain `cargo test` or cargo-nextest.
+
+## Stryker (JavaScript/TypeScript)
+
+Source: https://stryker-mutator.io/docs/stryker-js/incremental/ — StrykerJS is the JavaScript/TypeScript engine of Stryker.
+
+The PR-friendly recipe is incremental mode: enable with the `--incremental` flag (or `"incremental": true` in `stryker.config.json`). Available since Stryker 6.2. StrykerJS stores the previous result in `reports/stryker-incremental.json` (path set by the `--incrementalFile` option) and on the next run only re-tests code affected by your diff instead of every mutant.
+
+```bash
+npx stryker run --incremental   # Full run on main; later PRs only re-test what changed
+```
+
+Commit the `reports/stryker-incremental.json` state file so PR runs start from the main-branch baseline.
+
+## Assertion-Strength Rubric
+
+Mutation testing is the oracle for assertion quality: every surviving mutant points at an assertion too weak to notice the change. Grade your own assertions from weakest to strongest — weaker rungs let mutant classes through:
+
+1. **Smoke** — no assertion, or only "did not raise". Kills nothing.
+2. **Truthiness** — `assert result is not None`. Kills only hard-crash mutants.
+3. **Exact value** — `assert total() == 42`. Kills value mutants on the asserted path.
+4. **Relational / invariant** — roundtrip `decode(encode(x)) == x`, boundary probes at exactly the limit, model-vs-implementation comparisons. Kills entire classes of mutants.
+
+When a mutant survives at rung 3, the fix is usually a rung-4 assertion, not another example test. Industry evidence that this scales: Meta runs mutation testing in production to guide LLM-based test generation — Harman et al., "Mutation-Guided LLM-based Test Generation at Meta", FSE Companion '25, DOI 10.1145/3696630.3728544.
