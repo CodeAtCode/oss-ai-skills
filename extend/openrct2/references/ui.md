@@ -1,6 +1,6 @@
-# UI Development Reference
+> Loaded on demand from SKILL.md when the agent needs UI development details.
 
-This reference file is loaded on demand from ../SKILL.md when UI development details are needed.
+# UI Development Reference
 
 ## Check UI Availability
 

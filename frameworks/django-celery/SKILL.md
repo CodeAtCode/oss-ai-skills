@@ -13,6 +13,8 @@ metadata:
     - django-celery-beat
 ---
 
+> **Objective:** Use this skill to prevent task data corruption, transaction race conditions, and false-positive test results by enforcing ID-based serialization, `transaction.on_commit` task dispatch, and direct function testing patterns.
+
 # Django Celery Integration
 
 Celery distributed task queue integrated with Django, including django-celery-beat for database-backed periodic task scheduling.

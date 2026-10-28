@@ -1,6 +1,6 @@
-# Components and Actions Deep Dive
+> Loaded on demand from SKILL.md when the agent needs @display decorator parameters, filter class listings, action patterns, and tab configuration.
 
-This file is loaded on demand from ../SKILL.md for detailed component usage, fields, filters, actions, and tabs.
+# Components and Actions Deep Dive
 
 ## Components
 

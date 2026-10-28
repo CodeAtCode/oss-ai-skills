@@ -1,6 +1,6 @@
 # Examples
 
-Loaded on demand from the main django-allauth skill.
+> Loaded on demand from SKILL.md when the agent needs custom form/middleware examples.
 
 ### Custom Signup Form
 

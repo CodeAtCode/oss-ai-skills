@@ -1,4 +1,4 @@
-This reference file is loaded on demand from ../SKILL.md.
+> Loaded on demand from `SKILL.md` when the agent needs QML integration patterns and Q_PROPERTY syntax.
 
 # QML Integration
 

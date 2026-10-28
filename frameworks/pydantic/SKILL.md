@@ -12,6 +12,8 @@ metadata:
     - settings
 ---
 
+> **Objective:** Use this skill to prevent data-validation gaps and serialization bugs by enforcing boundary-level validation, Field constraints over manual checks, and v2 migration patterns that avoid silent coercion failures.
+
 # Pydantic
 
 Data validation using Python type annotations.
@@ -284,11 +286,12 @@ Load these reference files on demand:
 - **validators.md** — Field/model validators, custom types, error handling, TypeAdapter, discriminated unions
 - **types-and-defaults.md** — Field aliases, naming conventions, constrained types, special types (email, URL, UUID, secrets, enums)
 - **config-and-settings.md** — Model configuration, strict mode, multi-environment settings, BaseSettings
-- **django.md** — Django ORM integration, DjangoGetter, TextChoices, unsaved instance pitfalls
-- **fastapi.md** — FastAPI integration with request/response models and nested validation
-
 ## References
 
+- Official Docs: https://docs.pydantic.dev/ (primary reference for v2 API)
+- GitHub: https://github.com/pydantic/pydantic (report issues, view source)
+- Pydantic Discord: https://discord.gg/pydantic (community support)
+- FastAPI: https://fastapi.tiangolo.com/ (see Pydantic integration in production)
 - Official Docs: https://docs.pydantic.dev/
 - GitHub: https://github.com/pydantic/pydantic
 - Pydantic Discord: https://discord.gg/pydantic

@@ -15,304 +15,236 @@ metadata:
     - media
 ---
 
-# PyQt/PySide Multimedia
+> **Objective:** Use this skill to reduce playback-deadlock incidents, GStreamer-backend startup failures, codec-missing black-screen bugs, and recording-corruption incidents by enforcing backend-setup discipline, codec-availability checks, and platform-compatibility decision patterns below.
 
-Audio and video playback, camera capture, and media recording in PyQt6/PySide6.
+---
 
-## Overview
+## Core Rules (do X because Y)
 
-Qt Multimedia provides classes for audio, video, and camera functionality:
-- **QMediaPlayer** - Audio/video playback
-- **QVideoWidget** - Video display
-- **QAudioOutput** - Audio output management
-- **QCamera** - Camera capture
-- **QMediaCaptureSession** - Camera/recording session management
-- **QMediaRecorder** - Audio/video recording
-- **QMediaFormat** - Encoding format configuration
+### Check GStreamer plugins before playback because missing codecs produce silent black video
 
-**Backend by platform:**
-- Linux: GStreamer
-- Windows: DirectShow/WMF
-- macOS: AVFoundation
+On Linux, Qt Multimedia uses GStreamer as the backend. Missing plugins cause video to render as black screens without errors.
+
+```bash
+# Ubuntu/Debian - install ALL plugin groups before testing playback
+sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav
+
+# Verify plugins are loaded
+gst-inspect-1.0 | grep -E "h264|mp3|aac"
+```
+
+**Failure mode:** Video loads, QMediaPlayer reports "no error", but screen stays black. Solution: install missing plugin packages, not just Qt bindings.
+
+### Use QMediaCaptureSession not QMediaRecorder directly because the session owns the pipeline
+
+QMediaCaptureSession coordinates camera, video output, image capture, and recorder. Bypassing it causes resource conflicts and recording corruption.
+
+```python
+# ✅ Correct: session coordinates all components
+self.capture_session = QMediaCaptureSession()
+self.capture_session.setCamera(self.camera)
+self.capture_session.setVideoOutput(self.video_widget)
+self.capture_session.setRecorder(self.recorder)  # Session manages pipeline
+
+# ❌ Wrong: recorder without session causes conflicts
+self.recorder = QMediaRecorder()
+# Missing session = pipeline ownership unclear, recording fails silently
+```
+
+### Set output location before calling record() because unconfigured recorder corrupts files
+
+QMediaRecorder requires output location to be set before recording starts. Skipping this produces 0-byte or corrupted files.
+
+```python
+# ✅ Set location first, then record
+self.recorder.setOutputLocation(QUrl.fromLocalFile(path))
+self.recorder.record()
+
+# ❌ Wrong order: recording starts with no destination
+self.recorder.record()
+self.recorder.setOutputLocation(QUrl.fromLocalFile(path))  # Too late
+```
+
+### Check device availability before instantiating because unavailable devices crash on start
+
+QCamera and QAudioInput fail when instantiated with invalid device references. Always enumerate devices first.
+
+```python
+from PyQt6.QtMultimedia import QMediaDevices
+
+# ✅ Check before use
+cameras = QMediaDevices.videoInputs()
+if not cameras:
+    raise RuntimeError("No camera available - cannot start video")
+self.camera = QCamera(cameras[0])
+
+# ❌ Wrong: no check, crashes on camera.start()
+self.camera = QCamera()  # Invalid device
+self.camera.start()  # Silent failure or crash
+```
+
+### Handle QMediaPlayer error signals because playback failures are silent without them
+
+QMediaPlayer does not raise exceptions on playback errors. Without error signal handlers, users see nothing happen.
+
+```python
+self.player.errorChanged.connect(self.handle_playback_error)
+
+def handle_playback_error(self, error: QMediaPlayer.ErrorState):
+    if error != QMediaPlayer.ErrorState.NoError:
+        # Log or display the error - otherwise user sees nothing
+        print(f"Playback failed: {self.player.errorString()}")
+```
 
 ---
 
 ## Audio Playback
 
-### Basic Audio Player
+Basic audio player with volume control:
 
 ```python
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PyQt6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget, QSlider, QLabel
-from PyQt6.QtCore import Qt, QUrl
-import sys
+from PyQt6.QtCore import QUrl
 
-class AudioPlayer(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.player = QMediaPlayer()
-        self.audio_output = QAudioOutput()
-        self.player.setAudioOutput(self.audio_output)
-        
-        self.play_btn = QPushButton("Play")
-        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
-        self.volume_slider.setRange(0, 100)
-        
-        layout = QVBoxLayout()
-        layout.addWidget(self.play_btn)
-        layout.addWidget(self.volume_slider)
-        self.setLayout(layout)
-        
-        self.play_btn.clicked.connect(self.player.play)
-        self.volume_slider.valueChanged.connect(
-            lambda v: self.audio_output.setVolume(v / 100)
-        )
-        
-    def load_file(self, filepath):
-        self.player.setSource(QUrl.fromLocalFile(filepath))
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = AudioPlayer()
-    window.show()
-    sys.exit(app.exec())
+player = QMediaPlayer()
+audio_output = QAudioOutput()
+player.setAudioOutput(audio_output)
+player.setSource(QUrl.fromLocalFile("audio.mp3"))
+audio_output.setVolume(0.5)
+player.play()
 ```
+
+See `references/media-pipeline.md` for complete audio/video player with controls.
 
 ---
 
 ## Video Playback
 
-### Video Player with Controls
+Video playback requires QVideoWidget for display. Black screen usually means missing GStreamer plugins (see Core Rules).
 
 ```python
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QSlider, QLabel
-)
-from PyQt6.QtCore import Qt, QUrl
 
-class VideoPlayer(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.player = QMediaPlayer()
-        self.audio_output = QAudioOutput()
-        self.player.setAudioOutput(self.audio_output)
-        
-        self.video_widget = QVideoWidget()
-        self.player.setVideoOutput(self.video_widget)
-        
-        self.play_btn = QPushButton("Play")
-        self.position_slider = QSlider(Qt.Orientation.Horizontal)
-        self.time_label = QLabel("00:00 / 00:00")
-        
-        layout = QVBoxLayout()
-        layout.addWidget(self.video_widget)
-        layout.addWidget(self.play_btn)
-        layout.addWidget(self.position_slider)
-        layout.addWidget(self.time_label)
-        self.setLayout(layout)
-        
-        self.play_btn.clicked.connect(self.player.play)
-        self.player.positionChanged.connect(self.position_changed)
-        self.player.durationChanged.connect(self.duration_changed)
-        
-    def load_video(self, filepath):
-        self.player.setSource(QUrl.fromLocalFile(filepath))
-        
-    def position_changed(self, position):
-        self.position_slider.setValue(position)
-        
-    def duration_changed(self, duration):
-        self.position_slider.setRange(0, duration)
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = VideoPlayer()
-    window.show()
-    sys.exit(app.exec())
+player = QMediaPlayer()
+video_widget = QVideoWidget()
+player.setVideoOutput(video_widget)
+player.setSource(QUrl.fromLocalFile("video.mp4"))
+player.play()
 ```
 
-**Key methods:**
-- `play()`, `pause()`, `stop()` - Playback control
-- `setPosition(ms)`, `seek(seconds)` - Position control
-- `playbackState()` - Returns PlayingState, PausedState, or StoppedState
+See `references/media-pipeline.md` for complete player with position slider and time labels.
 
 ---
 
 ## Camera Capture
 
-### Camera Viewer
+### Photo Capture
 
-```python
-from PyQt6.QtMultimedia import QCamera, QMediaDevices
-from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton
-
-class CameraViewer(QWidget):
-    def __init__(self):
-        super().__init__()
-        cameras = QMediaDevices.videoInputs()
-        if not cameras:
-            print("No cameras available")
-            return
-            
-        self.camera = QCamera(cameras[0])
-        self.video_widget = QVideoWidget()
-        
-        layout = QVBoxLayout()
-        layout.addWidget(self.video_widget)
-        self.setLayout(layout)
-        
-        self.camera.setVideoOutput(self.video_widget)
-        self.camera.start()
-        
-    def closeEvent(self, event):
-        self.camera.stop()
-        super().closeEvent(event)
-```
-
-### Photo Capture with QMediaCaptureSession
+Use QMediaCaptureSession with QImageCapture for photo capture:
 
 ```python
 from PyQt6.QtMultimedia import QCamera, QMediaCaptureSession, QImageCapture
-from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton
+from PyQt6.QtMultimedia import QMediaDevices
 
-class CameraCapture(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.camera = QCamera()
-        self.capture_session = QMediaCaptureSession()
-        self.capture_session.setCamera(self.camera)
-        
-        self.video_widget = QVideoWidget()
-        self.capture_session.setVideoOutput(self.video_widget)
-        
-        self.image_capture = QImageCapture()
-        self.capture_session.setImageCapture(self.image_capture)
-        
-        self.capture_btn = QPushButton("Capture Photo")
-        self.capture_btn.clicked.connect(self.capture_photo)
-        
-        layout = QVBoxLayout()
-        layout.addWidget(self.video_widget)
-        layout.addWidget(self.capture_btn)
-        self.setLayout(layout)
-        
-        self.camera.start()
-        
-    def capture_photo(self):
-        self.image_capture.captureToFile()
+cameras = QMediaDevices.videoInputs()
+if not cameras:
+    raise RuntimeError("No camera found")
+
+camera = QCamera(cameras[0])
+capture_session = QMediaCaptureSession()
+capture_session.setCamera(camera)
+
+image_capture = QImageCapture()
+capture_session.setImageCapture(image_capture)
+
+camera.start()
+image_capture.captureToFile()
 ```
+
+See `references/media-pipeline.md` for camera with device selection and photo preview.
 
 ---
 
 ## Audio/Video Recording
 
-### Media Recorder
+### Video Recording
+
+Use QMediaRecorder attached to QMediaCaptureSession:
 
 ```python
 from PyQt6.QtMultimedia import QCamera, QMediaCaptureSession, QMediaRecorder
-from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel
-from PyQt6.QtCore import QUrl
 
-class MediaRecorder(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.camera = QCamera()
-        self.capture_session = QMediaCaptureSession()
-        self.capture_session.setCamera(self.camera)
-        
-        self.video_widget = QVideoWidget()
-        self.capture_session.setVideoOutput(self.video_widget)
-        
-        self.recorder = QMediaRecorder()
-        self.capture_session.setRecorder(self.recorder)
-        
-        self.record_btn = QPushButton("Start Recording")
-        self.status_label = QLabel("Ready")
-        
-        layout = QVBoxLayout()
-        layout.addWidget(self.video_widget)
-        layout.addWidget(self.record_btn)
-        layout.addWidget(self.status_label)
-        self.setLayout(layout)
-        
-        self.record_btn.clicked.connect(self.toggle_recording)
-        self.recorder.recorderStateChanged.connect(self.update_status)
-        
-    def toggle_recording(self):
-        if self.recorder.recorderState() == QMediaRecorder.RecorderState.RecordingState:
-            self.recorder.stop()
-        else:
-            self.recorder.setOutputLocation(QUrl.fromLocalFile("output.mp4"))
-            self.recorder.record()
-            
-    def update_status(self, state):
-        states = {
-            QMediaRecorder.RecorderState.StoppedState: "Stopped",
-            QMediaRecorder.RecorderState.RecordingState: "Recording",
-            QMediaRecorder.RecorderState.PausedState: "Paused"
-        }
-        self.status_label.setText(states.get(state, "Unknown"))
+camera = QCamera()
+capture_session = QMediaCaptureSession()
+capture_session.setCamera(camera)
+
+recorder = QMediaRecorder()
+capture_session.setRecorder(recorder)
+
+recorder.setOutputLocation(QUrl.fromLocalFile("output.mp4"))
+recorder.record()
+```
+
+See `references/media-pipeline.md` for complete recorder with status handling and timestamps.
+
+### Audio Recording
+
+For audio-only recording, attach QAudioInput to the session:
+
+```python
+from PyQt6.QtMultimedia import QMediaRecorder, QMediaCaptureSession, QAudioInput
+
+capture_session = QMediaCaptureSession()
+audio_input = QAudioInput()
+capture_session.setAudioInput(audio_input)
+
+recorder = QMediaRecorder()
+capture_session.setRecorder(recorder)
+recorder.record()
 ```
 
 ---
 
 ## GStreamer Backend (Linux)
 
-```bash
-# Ubuntu/Debian - core plugins
-sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-    gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+Linux uses GStreamer. Install plugin packages before testing multimedia:
 
-# Additional codec support
-sudo apt-get install gstreamer1.0-libav
+```bash
+# Core + bad + ugly plugins + libav for broad codec support
+sudo apt-get install gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav
+
+# Verify GStreamer can find codecs
+gst-inspect-1.0 h264parse
+gst-inspect-1.0 mp3
 ```
+
+**Failure mode:** `QMediaPlayer` loads video file but playback fails with no error. Cause: GStreamer missing codec plugins. Fix: install plugin packages above.
 
 ---
 
 ## Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| No audio/video output | Check `QMediaDevices.audioOutputs()` and `videoOutputs()` |
-| No cameras found | Check `QMediaDevices.videoInputs()` |
-| Format not supported | Install codec pack (Windows) or GStreamer plugins (Linux) |
-| Playback fails | Check `player.error()` for specific error code |
-
----
-
-## Best Practices
-
-```python
-# ✅ Check device availability first
-from PyQt6.QtMultimedia import QMediaDevices
-if not QMediaDevices.audioInputs():
-    print("No microphone available")
-
-# ✅ Set output location before recording
-recorder.setOutputLocation(QUrl.fromLocalFile(path))
-recorder.record()
-
-# ✅ Clean up on close
-def closeEvent(self, event):
-    self.camera.stop()
-    self.recorder.stop()
-    super().closeEvent(event)
-```
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Black video screen | Missing GStreamer codec plugins | Install `gstreamer1.0-plugins-bad` and `gstreamer1.0-libav` |
+| Recording produces 0-byte file | Output location not set before `record()` | Call `setOutputLocation()` before `record()` |
+| Camera.start() crashes | Camera device unavailable | Check `QMediaDevices.videoInputs()` before instantiating QCamera |
+| No audio output | Wrong audio output device selected | Check `QMediaDevices.audioOutputs()` and set explicitly |
+| Playback fails silently | Error signal not connected | Connect to `errorChanged` signal and handle errors |
 
 ---
 
 ## Deep Dives
 
-For detailed implementations, see the reference files:
+See reference files loaded on demand:
 
-- **Media Pipeline** (`references/media-pipeline.md`) - QMediaPlayer + QVideoWidget, QCamera + QMediaCaptureSession, QMediaRecorder setup
-- **Codecs & Platforms** (`references/codecs-platforms.md`) - Platform-specific codec support, installation guides, format compatibility
+- **`references/media-pipeline.md`** - Complete video player with controls, camera capture with session management, media recorder setup, error handling patterns
+- **`references/codecs-platforms.md`** - Platform-specific codec support tables, installation commands for Linux/Windows/macOS, format compatibility guides
 
 ---
 

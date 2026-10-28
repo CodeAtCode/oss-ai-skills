@@ -12,6 +12,8 @@ metadata:
     - orm
 ---
 
+> **Objective:** Use this skill to prevent race conditions, deadlocks, and data-integrity violations by enforcing atomic transaction boundaries, select_for_update locking patterns, and on_commit discipline for external calls.
+
 # Django Transactions & Concurrency
 
 Handle race conditions, locking, and transaction boundaries in Django.
@@ -458,10 +460,11 @@ def create_batch_orders(order_data_list):
 2. **Never call external APIs inside transactions** - Use `on_commit`
 3. **Use `select_for_update` for sequential ID generation** - Prevent races
 4. **Add unique constraints before upserts** - Ensure data integrity
-5. **Handle `IntegrityError` for race conditions** - Return 409 for conflicts
-6. **Save before M2M operations** - Object must have PK
-7. **Use `nowait` or `skip_locked` for high concurrency** - Avoid waiting
+## References
 
+- [Django Transactions Documentation](https://docs.djangoproject.com/en/stable/topics/db/transactions/) (primary reference for transaction management)
+- [select_for_update Documentation](https://docs.djangoproject.com/en/stable/ref/models/querysets/#select-for-update) (lookup locking options before implementing concurrency control)
+- Source: frameworks/django/SKILL.md (v2.2.0)
 ---
 
 ## References

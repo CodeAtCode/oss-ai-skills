@@ -12,6 +12,8 @@ metadata:
     - tdd
 ---
 
+> **Objective:** Use this skill to prevent false-positive tests, fixture coupling, and untested code paths in Django applications by enforcing TDD workflow discipline, isolated fixtures, and mutation-tested assertion quality.
+
 # Django Testing with TDD
 
 Test-driven development for Django applications using pytest, factory_boy, and Django REST Framework.
@@ -61,8 +63,8 @@ addopts =
     --cov-report=term-missing
     --strict-markers
 markers =
-    slow: marks tests as slow
-    integration: marks tests as integration tests
+    slow: marks tests as slow to exclude from CI fast path
+    integration: marks tests as integration tests requiring external services
 ```
 
 ### Test Settings

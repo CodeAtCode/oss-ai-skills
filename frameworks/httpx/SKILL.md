@@ -12,6 +12,8 @@ metadata:
     - network
 ---
 
+> **Objective:** Use this skill to prevent connection leaks, hung requests, and duplicate side effects in HTTP clients by enforcing timeouts, session reuse, and idempotent retry patterns.
+
 # httpx
 
 Modern HTTP client with sync/async APIs, HTTP/2, and production-grade features.
@@ -84,7 +86,7 @@ except TimeoutException as e:
 
 ### Connection Pooling
 
-**Rule: One `httpx.Client` per application/process, reused across requests.** A client per request defeats pooling and leaks connections.
+**Do reuse one `httpx.Client` per application/process across requests because creating a client per request defeats pooling and leaks connections.**
 
 ```python
 # Correct: Single client reused

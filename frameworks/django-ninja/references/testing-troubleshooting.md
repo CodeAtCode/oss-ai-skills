@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs pytest testing patterns, authentication testing, and common issue resolutions.
+
 # Testing & Common Issues
 
 > This reference file is loaded on demand from the main django-ninja SKILL.md entry.

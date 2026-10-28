@@ -1,5 +1,6 @@
-# Optimization Patterns & Camera System
+> Loaded on demand from SKILL.md when the agent needs sprite batching, entity pools, or parallax scrolling patterns.
 
+# Optimization Patterns & Camera System
 > This reference file is loaded on demand from ../SKILL.md
 
 ## Optimization Patterns

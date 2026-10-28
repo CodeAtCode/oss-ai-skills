@@ -14,6 +14,8 @@ metadata:
     - ajax
 ---
 
+> **Objective:** Use this skill to prevent stale DOM updates, CSRF failures, and unnecessary full page reloads by enforcing proper HTMX response types, hx-headers configuration, and partial rendering patterns.
+
 # Django HTMX
 
 Django-htmx provides seamless integration between Django and htmx for building modern, dynamic web applications without writing complex JavaScript.

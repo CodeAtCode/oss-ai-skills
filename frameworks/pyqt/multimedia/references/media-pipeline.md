@@ -1,6 +1,6 @@
 # Media Pipeline Deep Dive
 
-Loaded on demand from ../SKILL.md
+> Loaded on demand from `SKILL.md` when the agent needs complete video player implementations, camera capture with session management, media recorder setup, and error handling patterns.
 
 ## QMediaPlayer + QVideoWidget
 

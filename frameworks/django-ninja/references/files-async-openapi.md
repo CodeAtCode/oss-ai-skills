@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs file uploads, async view support, and OpenAPI documentation customization.
+
 # File Uploads, Async Support & OpenAPI Documentation
 
 > This reference file is loaded on demand from the main django-ninja SKILL.md entry.

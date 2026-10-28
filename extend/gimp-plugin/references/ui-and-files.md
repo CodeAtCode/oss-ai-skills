@@ -1,6 +1,6 @@
-# User Interface and File Operations Reference
+> Loaded on demand from SKILL.md when the agent needs GTK dialogs, color pickers, file dialogs, progress bars, or file load/save operations.
 
-This reference file is loaded on demand from ../SKILL.md when working with dialogs, file operations, or progress bars.
+# User Interface and File Operations Reference
 
 ## User Interface
 

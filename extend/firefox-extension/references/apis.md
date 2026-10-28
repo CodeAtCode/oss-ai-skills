@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs the complete WebExtension API namespace list and usage patterns.
+
 # WebExtension APIs
 
 > This reference file is loaded on demand from ../SKILL.md.

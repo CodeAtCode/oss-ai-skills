@@ -13,387 +13,115 @@ metadata:
     - messenger-api
 ---
 
+> **Objective:** Use this skill to reduce manifest-schema rejections, messenger-API-typed errors, and ATN-review failures by enforcing manifest-version discipline, API-boundary rules, and permission-scoping patterns below.
+
 # Thunderbird MailExtension Development
 
-Complete reference for building, testing, and publishing email extensions for Mozilla Thunderbird.
+## Core Rules
 
-## Overview
+**Do manifest_version discipline because MV2 deprecation will break extensions at Thunderbird 137+.** Set manifest_version: 3 for new extensions; migrate existing MV2 extensions now.
 
-Thunderbird extensions use the MailExtension API (based on WebExtensions) with the `messenger.*` namespace. Thunderbird supports both Manifest V2 and V3 since version 128.
+**Do declare messenger.* permissions explicitly because missing permissions fail silently at runtime.** Enumerate every API namespace in permissions before calling it.
 
-**Key Characteristics:**
-- Global namespace: `messenger` (Thunderbird-specific) + `browser` (standard WebExtensions)
-- Both MV2 and MV3 supported (Thunderbird 128+)
-- Thunderbird-specific APIs: `accounts`, `addressBooks`, `compose`, `folders`, `mailTabs`, `messages`, `messageDisplay`
-- Submission via ATN (addons.thunderbird.net)
+**Do use Experiment APIs only when messenger.* cannot reach required functionality because reviewers reject unnecessary Experiment access.** Cite the missing built-in API in submission notes.
 
-## Version Requirements
+**Do validate message content before processing because untrusted email data causes XSS in display scripts.** Sanitize HTML, escape user input, verify MIME types.
 
-| Version | Status | Notes |
-|---------|--------|-------|
-| 128.x (ESR) | Current | Full MV2 + MV3 support |
-| 115.x | Legacy | End of support |
-| < 115 | Deprecated | Not recommended |
+**Do use vCard format for contacts in MV3 because legacy contacts API is removed.** Call messenger.addressBooks.contacts.create with vCard string, not name/email fields.
 
-**Best Practice:** Set `strict_min_version` to "128.0"
+**Do implement onStartup/onShutdown in Experiment APIs because missing cleanup causes crashes on extension reload.** Unregister observers, clear caches, remove listeners.
 
-## Manifest Structure
+**Do place extension ID in browser_specific_settings.gecko.id because ATN rejects extensions without stable IDs.** Generate UUID-formatted ID, do not use auto-generated values.
 
-### Manifest V3 (Recommended, Thunderbird 128+)
+**Do set strict_min_version to "128.0" because older Thunderbird versions lack MV3 support.** Test on Thunderbird 128 ESR minimum.
 
-```json
-{
-  "manifest_version": 3,
-  "name": "My Thunderbird Extension",
-  "version": "1.0.0",
-  "description": "Extension description",
-  "author": "Your Name",
+## UI Actions
 
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "extension@example.com",
-      "strict_min_version": "128.0"
-    }
-  },
+**Do attach listeners to action.onClicked because extensions with no popup need click handlers.** Register in background.js, not in popup script.
 
-  "icons": {
-    "16": "icons/icon-16.png",
-    "32": "icons/icon-32.png",
-    "64": "icons/icon-64.png"
-  },
+**Do update badge text asynchronously because setBadgeText returns a Promise.** Awaiting prevents race conditions with badge color updates.
 
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
-
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "My Extension",
-    "default_icon": "icons/icon-32.png"
-  },
-
-  "permissions": [
-    "storage",
-    "messagesRead",
-    "addressBooks"
-  ]
-}
-```
-
-### Manifest V2 (Still Supported)
-
-```json
-{
-  "manifest_version": 2,
-  "name": "My Thunderbird Extension",
-  "version": "1.0.0",
-  "author": "Your Name",
-
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "extension@example.com",
-      "strict_min_version": "128.0"
-    }
-  },
-
-  "background": {
-    "scripts": ["background.js"],
-    "type": "module"
-  },
-
-  "browser_action": {
-    "default_popup": "popup.html",
-    "default_title": "My Extension"
-  },
-
-  "permissions": [
-    "storage",
-    "messagesRead",
-    "addressBooks"
-  ]
-}
-```
-
-### MV2 vs MV3 Key Differences
-
-| Feature | MV2 | MV3 |
-|---------|-----|-----|
-| Toolbar button | `browser_action` | `action` |
-| Background | `background.scripts` | `background.service_worker` |
-| Execute script | `tabs.executeScript` | `messenger.scripting.messageDisplay.executeScript` |
-| Compose scripts | `composeScripts` | `scripting.compose` |
-| Contacts API | `messenger.contacts.*` | `messenger.addressBooks.contacts.*` (vCard only) |
-
-### All Manifest Keys Reference
-
-**Metadata:**
-- `name` (required) - Extension name
-- `version` (required) - Version string
-- `description` - Short description
-- `author` - Author name
-- `icons` - Extension icons
-
-**Thunderbird-Specific:**
-- `browser_specific_settings.gecko.id` - **Required for ATN**
-- `browser_specific_settings.gecko.strict_min_version` - Minimum version
-
-**Background & Scripts:**
-- `background` - Service worker (MV3) or scripts (MV2)
-- `message_display_scripts` (MV2) - Scripts for displayed messages
-
-**UI Components:**
-- `action` (MV3) / `browser_action` (MV2) - Main toolbar button
-- `compose_action` - Compose window toolbar button
-- `message_display_action` - Message view toolbar button
-
-**Permissions:**
-- `permissions` - API permissions
-- `experiment_apis` - Custom Experiment APIs
-
-**Other:**
-- `commands` - Keyboard shortcuts
-- `options_ui` - Options page
-
-## UI Actions (Toolbar Buttons)
-
-### Main Toolbar (action / browser_action)
-
-```json
-{
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "My Extension",
-    "default_icon": {
-      "16": "icons/icon-16.png",
-      "32": "icons/icon-32.png"
-    }
-  }
-}
-```
-
-```javascript
-// Listen for clicks (if no popup)
-messenger.action.onClicked.addListener((tab) => {
-  console.log("Action clicked");
-});
-
-// Update badge
-await messenger.action.setBadgeText({ text: "5" });
-await messenger.action.setBadgeBackgroundColor({ color: "#ff0000" });
-
-// Update icon
-await messenger.action.setIcon({ path: "icons/icon-active.png" });
-```
-
-### Compose Window (compose_action)
-
-```json
-{
-  "compose_action": {
-    "default_popup": "compose_popup.html",
-    "default_title": "Compose Tool",
-    "default_icon": "icons/compose-icon.png"
-  }
-}
-```
-
-```javascript
-// Listen for clicks in compose window
-messenger.composeAction.onClicked.addListener((tab) => {
-  const details = await messenger.compose.getComposeDetails(tab.id);
-  console.log("Compose action clicked:", details.subject);
-});
-```
-
-### Message Display (message_display_action)
-
-```json
-{
-  "message_display_action": {
-    "default_popup": "message_popup.html",
-    "default_title": "Message Tool",
-    "default_icon": "icons/message-icon.png"
-  }
-}
-```
-
-```javascript
-// Listen for clicks on message
-messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
-  const message = await messenger.messageDisplay.getDisplayedMessage(tab.id);
-  console.log("Message action clicked:", message.subject);
-});
-```
+**Do use compose_action for compose-window tools because message_display_action only works in message view.** Match button location to API scope.
 
 ## Message Display Scripts
 
-### MV2 Configuration
+**Do execute display scripts via messenger.scripting.messageDisplay.executeScript in MV3 because manifest declaration is removed.** Call dynamically after tab loads.
 
-```json
-{
-  "message_display_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["message_content.js"],
-      "css": ["message_styles.css"]
-    }
-  ]
-}
-```
+**Do limit display script APIs to runtime/storage/i18n because full messenger.* is unavailable.** Communicate with background via runtime.sendMessage for privileged operations.
 
-### MV3 Configuration
+**Do validate message DOM before manipulation because email content varies widely.** Check element existence, handle plain-text vs HTML, catch parsing errors.
 
-```javascript
-// In background.js
-await messenger.scripting.messageDisplay.executeScript({
-  tabId: tabId,
-  files: ["message_content.js"]
-});
-```
+## MV2 → MV3 Migration Decision Guide
 
-### Available APIs in Display Scripts
+**Do migrate now because Thunderbird 137 removes MV2 support.** Priority order:
+1. Replace browser_action with action
+2. Migrate background.scripts to background.service_worker
+3. Convert composeScripts to scripting.compose
+4. Update contacts API to messenger.addressBooks.contacts.*
 
-Limited APIs available:
-- `messenger.runtime.connect()`, `messenger.runtime.sendMessage()`
-- `messenger.runtime.onConnect`, `messenger.runtime.onMessage`
-- `messenger.i18n.getMessage()`, `messenger.i18n.getAcceptLanguages()`
-- `messenger.storage.*`
+**Do not use messenger.contacts.* in MV3 because it is removed.** Use messenger.addressBooks.contacts.quickSearch and contacts.create with vCard.
 
-```javascript
-// message_content.js
-// Send message to background
-const response = await messenger.runtime.sendMessage({
-  action: "processMessage",
-  content: document.body.innerText
-});
-
-// Listen for messages from background
-messenger.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "highlight") {
-    // Highlight text in message
-    document.body.innerHTML = document.body.innerHTML.replace(
-      message.text,
-      `<mark>${message.text}</mark>`
-    );
-  }
-});
-```
+**Do test display scripts on both HTML and plain-text messages because rendering differs.** Verify script handles text/plain bodies gracefully.
 
 ## Deep Dives
 
-For detailed reference on specific topics, load these reference files on demand:
+See references for detailed API catalogs loaded on demand:
 
-- **Messenger APIs** - Complete `messenger.*` API reference (accounts, messages, folders, addressBooks, compose, mailTabs): `./references/messenger-apis.md`
-- **Experiment APIs** - Custom Experiment API development guide: `./references/experiment-apis.md`
-- **ATN Submission** - Publishing workflow and review criteria: `./references/atn-submission.md`
-- **Testing & Migration** - Debugging, testing workflow, and legacy migration: `./references/testing-migration.md`
+- **Messenger APIs** — Complete messenger.* reference (accounts, messages, folders, addressBooks, compose, mailTabs): `./references/messenger-apis.md`
+- **Experiment APIs** — Custom Experiment API development: `./references/experiment-apis.md`
+- **ATN Submission** — Publishing workflow and review criteria: `./references/atn-submission.md`
+- **Testing & Migration** — Debugging, testing workflow, legacy migration: `./references/testing-migration.md`
 
-## Best Practices
-
-### Code Organization
-
+**Do structure extensions with clear separation because monolithic files become unmaintainable.** Pattern:
 ```
 my-extension/
 ├── manifest.json
-├── background.js
-├── popup.html
-├── popup.js
-├── compose_popup.html
-├── compose_popup.js
-├── api/
+├── background.js          # Event handlers, API orchestration
+├── popup.html/js          # UI, user interaction
+├── compose_popup.html/js  # Compose window UI
+├── message_popup.html/js  # Message view UI
+├── message_content.js     # Display script (limited API)
+├── api/                   # Experiment APIs (if needed)
 │   └── myapi/
 │       ├── schema.json
 │       └── implementation.js
-├── icons/
-│   ├── icon-16.png
-│   ├── icon-32.png
-│   └── icon-64.png
-├── _locales/
-│   ├── en/
-│   │   └── messages.json
-│   └── it/
-│       └── messages.json
-└── README.md
+├── icons/                 # 16, 32, 64 px
+└── _locales/              # i18n strings
 ```
 
-### Error Handling
+## Error Handling
 
-```javascript
-async function safeAsync(fn) {
-  try {
-    return await fn();
-  } catch (error) {
-    console.error("Error:", error);
-    return { error: error.message };
-  }
-}
+**Do wrap async calls with explicit error logging because silent failures hide bugs.** Log error message plus context (message ID, folder, operation).
 
-// Usage
-const result = await safeAsync(() => messenger.messages.get(messageId));
-if (result.error) {
-  console.error("Failed to get message:", result.error);
-}
-```
+**Do check messenger.runtime.lastError after promises because unresolved errors accumulate.** Clear lastError before next operation.
 
-### Performance
+**Do return structured error objects because callers need to distinguish failure modes.** Include error type, offending values, suggested fix.
 
-- Use pagination for large message lists
-- Cache frequently accessed data
-- Debounce rapid events
-- Use `messages.query()` with filters instead of `list()` + filter manually
+## Performance
 
-### Security
+**Do use messages.query with filters because server-side filtering is faster than client-side.** Avoid list() + filter manually for large folders.
 
-- Validate all user input
-- Sanitize HTML before display
-- Use minimal permissions
-- Don't store sensitive data in `storage.local` unencrypted
-- Validate message content before processing
+**Do debounce rapid events because user actions fire multiple times.** Throttle onMessage, onMessageDisplayed handlers.
+
+**Do paginate large message lists because loading all messages blocks the UI.** Use limit/offset in queries.
+
+## Security
+
+**Do validate all user input before storage because unvalidated data corrupts state.** Schema-validate permissions, folder IDs, message IDs.
+
+**Do sanitize HTML before injection because email content may contain scripts.** Use DOMParser, strip dangerous elements.
+
+**Do use minimal permissions because excessive permissions trigger ATN review rejection.** Request only what the extension needs.
+
+**Do not store sensitive data unencrypted because storage.local is readable.** Encrypt passwords, tokens before storage.
 
 ## Differences from Firefox WebExtensions
 
-| Feature | Firefox | Thunderbird |
-|---------|---------|-------------|
-| Namespace | `browser.*` | `messenger.*` (mail) + `browser.*` (common) |
-| Context | Web browser | Email client |
-| Content scripts | Work on web pages | Only in web tabs, not email content |
-| Main action | `browser_action` / `action` | Same + `compose_action`, `message_display_action` |
-| Mail APIs | None | `accounts`, `compose`, `messages`, etc. |
-| Experiments | Limited | Common for email-specific features |
-| Store | AMO | ATN |
+**Do use messenger.* for mail APIs because browser.* lacks email functionality.** messenger.accounts, messenger.messages, messenger.compose are Thunderbird-specific.
 
-## File Structure Template
+**Do expect content scripts to work only in web tabs because email content is sandboxed.** Use message_display_scripts for email body access.
 
-```
-my-thunderbird-extension/
-├── manifest.json
-├── background.js
-├── popup.html
-├── popup.js
-├── compose_popup.html
-├── compose_popup.js
-├── message_popup.html
-├── message_popup.js
-├── message_content.js
-├── styles/
-│   └── popup.css
-├── icons/
-│   ├── icon-16.png
-│   ├── icon-32.png
-│   └── icon-64.png
-├── api/
-│   └── myapi/
-│       ├── schema.json
-│       └── implementation.js
-├── _locales/
-│   ├── en/
-│   │   └── messages.json
-│   └── it/
-│       └── messages.json
-└── README.md
-```
-
+**Do implement Experiment APIs for XPCOM access because WebExtensions cannot reach internals.** Experiments bridge the gap but require justification.
 ## Quick Reference
 
 ### Essential Permissions
@@ -401,13 +129,13 @@ my-thunderbird-extension/
 ```json
 {
   "permissions": [
-    "storage",           // Data storage
-    "messagesRead",      // Read messages
-    "messagesMove",      // Move/copy/delete messages
-    "addressBooks",      // Access contacts
+    "storage",           // Data persistence
+    "messagesRead",      // Read message content
+    "messagesMove",      // Move/copy/delete
+    "addressBooks",      // Contact access
     "compose",           // Compose windows
-    "accountsRead",      // Read accounts
-    "accountsFolders"    // Access folders
+    "accountsRead",      // Account listing
+    "accountsFolders"    // Folder access
   ]
 }
 ```
@@ -415,46 +143,49 @@ my-thunderbird-extension/
 ### Essential APIs
 
 ```javascript
-// Messages
+// Messages — list, get, query, update, move, delete
 messenger.messages.list(folderId)
 messenger.messages.get(messageId)
-messenger.messages.query({ from, unread })
+messenger.messages.query({ from, unread, limit })
 messenger.messages.update(messageId, { read: true })
+messenger.messages.move([messageId], destinationFolderId)
 
-// Folders
+// Folders — get, create, rename, delete
 messenger.folders.get(folderId)
 messenger.folders.getSubFolders(account)
+messenger.folders.create(accountId, name)
 
-// Compose
+// Compose — open, modify, send拦截
 messenger.compose.beginNew({ to, subject, body })
 messenger.compose.getComposeDetails(tabId)
+messenger.compose.onBeforeSend.addListener(handler)
 
-// Address Books
+// Address Books — vCard-only in MV3
 messenger.addressBooks.list()
 messenger.addressBooks.contacts.create(addressBookId, { vCard })
+messenger.addressBooks.contacts.quickSearch(query)
 
-// Display
+// Display — event-driven
+messenger.messageDisplay.onMessageDisplayed.addListener(handler)
 messenger.messageDisplay.getDisplayedMessage(tabId)
-messenger.messageDisplayAction.onClicked
 ```
 
-### Workflow Summary
+### Workflow
 
-1. **Develop:** Write code, load temporarily
-2. **Debug:** Use Debug Add-ons → Inspect
-3. **Test:** Test all functionality
-4. **Build:** Create .zip with manifest and scripts
-5. **Submit:** Upload to ATN
-6. **Review:** Respond to reviewer feedback
-7. **Publish:** Extension goes live
+1. **Develop:** Load temporarily via Debug Add-ons
+2. **Debug:** Inspect background/popup via DevTools
+3. **Test:** Verify on HTML and plain-text messages
+4. **Build:** Create .zip with manifest and all scripts
+5. **Submit:** Upload to ATN with inline privacy policy
+6. **Review:** Respond within 10 days
+7. **Publish:** Extension goes live after approval
 
 ## References
 
 - [Thunderbird Developer Hub](https://developer.thunderbird.net/add-ons/)
-- [WebExtension API Reference](https://webextension-api.thunderbird.net/)
 - [Supported APIs](https://developer.thunderbird.net/add-ons/mailextensions/supported-webextension-api)
-- [Manifest V3 Guide](https://github.com/thunderbird/webext-docs/blob/beta-mv2/guides/manifestV3.rst)
+- [MV3 Migration Guide](https://github.com/thunderbird/webext-docs/blob/beta-mv2/guides/manifestV3.rst)
 - [Example Extensions](https://github.com/thunderbird/webext-examples)
-- [Experiment Support](https://github.com/thunderbird/webext-support)
+- [Experiment Support](https://github.com/thunderbird/thunderbird/webext-support)
 - [ATN Developer Hub](https://addons.thunderbird.net/developers/)
 - [ATN Review Policy](https://thunderbird.github.io/atn-review-policy/)

@@ -14,6 +14,7 @@ metadata:
     - testing
 ---
 
+> **Objective:** Use this skill to prevent flaky visual regression tests and missed UI regressions by enforcing baseline discipline, dynamic content masking, and CI integration patterns below.
 # Playwright Visual Regression Testing
 
 Complete guide to visual regression testing using Playwright's built-in `toHaveScreenshot()` API, VUDA MCP integration, and AI-powered visual analysis with vision models.
@@ -296,16 +297,22 @@ docker run --rm -v $(pwd):/app mcr.microsoft.com/playwright:v1.50.0-noble
 
 ### 4. Threshold Guidelines
 
-| Type | Recommended Threshold |
-|------|----------------------|
-| Simple components | `maxDiffPixelRatio: 0.001` (0.1%) |
-| Text-heavy pages | `maxDiffPixelRatio: 0.01` (1%) |
-| Full-page with fonts | `maxDiffPixelRatio: 0.02` (2%) |
-
+**Do use these thresholds:**
+- Simple components: `maxDiffPixelRatio: 0.001` (0.1%) because tight tolerance catches unintended changes
+- Text-heavy pages: `maxDiffPixelRatio: 0.01` (1%) because font rendering varies slightly
+- Full-page with fonts: `maxDiffPixelRatio: 0.02` (2%) because anti-aliasing creates pixel variance
 ### 5. Handle Dynamic Content
 
 ```typescript
-// Always mask:
+### 5. Handle Dynamic Content
+
+**Do mask these elements:**
+- Timestamps — Change every test run
+- User avatars — Unique per session
+- Ad slots — Vary by campaign
+- Like counts — Dynamic social data
+
+```typescript
 test('feed with masking', async ({ page }) => {
   await page.goto('/feed');
   

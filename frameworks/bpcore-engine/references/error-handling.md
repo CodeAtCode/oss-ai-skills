@@ -1,6 +1,6 @@
-# Error Handling
+> Loaded on demand from SKILL.md when the agent needs bounds checking and validation patterns.
 
-> This reference file is loaded on demand from ../SKILL.md
+# Error Handling
 
 ## Out-of-Bounds Detection
 

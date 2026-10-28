@@ -1,4 +1,4 @@
-This file is loaded on demand from ../SKILL.md.
+> Loaded on demand from `SKILL.md` when the agent needs compiler error quick reference.
 
 # Compiler Errors Quick Reference
 

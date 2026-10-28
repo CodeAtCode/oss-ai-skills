@@ -14,6 +14,8 @@ metadata:
     - kde-frameworks
 ---
 
+> **Objective:** Use this skill to reduce plugin-load failures, CMake-link errors, and thread-assertion violations by enforcing ECM-target discipline, Qt-thread rules, and KPlugin registration patterns below.
+
 # Kate Plugin Development
 
 C++ plugins for Kate using KTextEditor Framework, KDE Frameworks, and Qt.
@@ -90,46 +92,7 @@ kcoreaddons_add_plugin(myplugin INSTALL_NAMESPACE "kate"
 install(FILES metadata.json DESTINATION ${KDE_INSTALL_KTPLUGINDIR}/myplugin)
 ```
 
-## KTextEditor API
-
-```cpp
-#include <KTextEditor/Document>
-#include <KTextEditor/View>
-#include <KTextEditor/Range>
-#include <KTextEditor/Cursor>
-
-class DocumentHandler {
-public:
-    explicit DocumentHandler(KTextEditor::Document *doc) : m_doc(doc) {}
-    void insertText(const KTextEditor::Cursor &cur, const QString &text) { m_doc->insertText(cur, text); }
-    void replaceText(const KTextEditor::Range &range, const QString &text) { m_doc->replaceText(range, text); }
-    QString getText() const { return m_doc->text(); }
-    QString getLine(int n) const { return m_doc->line(n); }
-    int lineCount() const { return m_doc->lines(); }
-    KTextEditor::Range search(const QString &pat, const KTextEditor::Cursor &start) { return m_doc->searchText(pat, start); }
-private:
-    KTextEditor::Document *m_doc;
-};
-
-class ViewHandler {
-public:
-    explicit ViewHandler(KTextEditor::View *view) : m_view(view) {}
-    KTextEditor::Cursor getCursorPosition() const { return m_view->cursorPosition(); }
-    void setCursorPosition(int line, int col) { m_view->setCursorPosition(line, col); }
-    QString getSelection() const { return m_view->selectionText(); }
-    void setSelection(const KTextEditor::Range &range) { m_view->setSelection(range); }
-    void clearSelection() { m_view->clearSelection(); }
-    void toggleFolding(const KTextEditor::Range &range) { m_view->toggleFolding(range); }
-private:
-    KTextEditor::View *m_view;
-};
-
-void positions(KTextEditor::Document *doc) {
-    KTextEditor::Cursor cursor(10, 5);
-    KTextEditor::Range range(10, 0, 10, 20);
-    if (range.isValid()) { QString text = range.text(doc); bool contains = range.contains(cursor); }
-}
-```
+See references/ktexteditor-api.md for KTextEditor class catalogs and API usage patterns.
 
 ## CMake Build System
 
@@ -155,24 +118,7 @@ install(TARGETS myplugin LIBRARY DESTINATION ${KDE_INSTALL_KTPLUGINDIR}/myplugin
 install(FILES metadata.json DESTINATION ${KDE_INSTALL_KTPLUGINDIR}/myplugin)
 ```
 
-```cpp
-#include <QJsonObject>
-#include <QJsonDocument>
-#include <QFile>
-
-QJsonObject loadConfig(const QString &path) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return {};
-    QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
-    return doc.object();
-}
-
-void saveConfig(const QString &path, const QJsonObject &config) {
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly)) file.write(QJsonDocument(config).toJson(QJsonDocument::Indented));
-}
-```
+See references/json-config-utils.md for JSON configuration utility patterns.
 
 ## Threaded Agent Architecture
 
@@ -252,57 +198,7 @@ private:
 };
 ```
 
-## Interface-Based Design
-
-```cpp
-#include <memory>
-#include <QString>
-#include <QVariant>
-
-class IThreadStorage {
-public:
-    virtual ~IThreadStorage() = default;
-    virtual void store(const QString &key, const QVariant &value) = 0;
-    virtual QVariant retrieve(const QString &key) = 0;
-    virtual bool has(const QString &key) = 0;
-    virtual void remove(const QString &key) = 0;
-    virtual void clear() = 0;
-};
-
-class JsonThreadStorage : public IThreadStorage {
-public:
-    explicit JsonThreadStorage(const QString &filePath) : m_filePath(filePath) { load(); }
-    void store(const QString &key, const QVariant &value) override { m_data[key] = QJsonValue::fromVariant(value); save(); }
-    QVariant retrieve(const QString &key) override { return m_data.contains(key) ? m_data[key].toVariant() : QVariant(); }
-    bool has(const QString &key) override { return m_data.contains(key); }
-    void remove(const QString &key) override { m_data.remove(key); save(); }
-    void clear() override { m_data = QJsonObject(); save(); }
-private:
-    void load() { QFile f(m_filePath); if (f.open(QIODevice::ReadOnly)) m_data = QJsonDocument::fromJson(f.readAll()).object(); }
-    void save() { QFile f(m_filePath); if (f.open(QIODevice::WriteOnly)) f.write(QJsonDocument(m_data).toJson()); }
-    QString m_filePath; QJsonObject m_data;
-};
-
-class MemoryThreadStorage : public IThreadStorage {
-public:
-    void store(const QString &key, const QVariant &value) override { m_data[key] = value; }
-    QVariant retrieve(const QString &key) override { return m_data.value(key); }
-    bool has(const QString &key) override { return m_data.contains(key); }
-    void remove(const QString &key) override { m_data.remove(key); }
-    void clear() override { m_data.clear(); }
-private:
-    QMap<QString, QVariant> m_data;
-};
-
-class AgentService {
-public:
-    explicit AgentService(std::unique_ptr<IThreadStorage> storage) : m_storage(std::move(storage)) {}
-    void runAgent(const QString &taskId) { m_storage->store("lastTask", taskId); m_storage->store("lastResult", processTask(taskId)); }
-private:
-    QString processTask(const QString &id) { return "Processed: " + id; }
-    std::unique_ptr<IThreadStorage> m_storage;
-};
-```
+See references/interface-patterns.md for C++ interface-based design and thread-safe storage patterns.
 
 ## Configuration with KConfig/QSettings
 
@@ -338,6 +234,8 @@ public:
     }
 };
 ```
+
+See references/configuration-reference.md for KConfig configuration patterns.
 
 ## Permission System
 
@@ -397,6 +295,8 @@ private:
     KTextEditor::MainWindow *m_mainWindow; PermissionManager *m_permManager;
 };
 ```
+
+See references/permission-system.md for permission management patterns.
 
 ## Testing C++ Plugins
 
@@ -461,6 +361,8 @@ target_link_libraries(test_myplugin PRIVATE Qt5::Test KF5::KTextEditor myplugin)
 add_test(NAME myplugin_tests COMMAND test_myplugin)
 ```
 
+See references/testing-patterns.md for QTest patterns and mock interfaces.
+
 ## Common Issues
 
 | Issue | Solution |
@@ -476,16 +378,27 @@ add_test(NAME myplugin_tests COMMAND test_myplugin)
 
 ## Best Practices
 
-- Use Q_PLUGIN_METADATA with JSON file for registration
-- Always check for null pointers on view/document
-- Use Qt::QueuedConnection for cross-thread signals
-- Implement cleanup in removeView() matching addView()
-- Store config in KConfig with namespaced groups
-- Use smart pointers for interface-based DI
-- Process long tasks in worker threads
-- Emit results via queued signals for UI updates
-- Use QTest with mock KTextEditor interfaces
-- Follow KDE coding style
+- **Do use Q_PLUGIN_METADATA with JSON file** because KPluginLoader skips undeclared factories and the plugin won't load
+- **Do check for null pointers on view/document** because KTextEditor APIs assert on invalid pointers
+- **Do use Qt::QueuedConnection for cross-thread signals** because GUI updates on non-main threads cause assertion violations
+- **Do implement cleanup in removeView() matching addView()** because orphaned connections leak memory and cause double-signal firing
+- **Do store config in KConfig with namespaced groups** because unnamespaced keys collide with other plugins
+- **Do use smart pointers for interface-based DI** because manual memory management in plugin lifecycles causes use-after-free
+- **Do process long tasks in worker threads** because blocking the main thread freezes the Kate UI
+- **Do emit results via queued signals for UI updates** because direct signal delivery to GUI objects from worker threads crashes
+- **Do use QTest with mock KTextEditor interfaces** because real KTextEditor objects require full Kate initialization
+- **Do follow KDE coding style** because inconsistent formatting breaks code review and merge processes
+
+## Deep Dives
+
+See the following references for detailed API catalogs and patterns (loaded on demand):
+
+- **references/ktexteditor-api.md** - KTextEditor class catalogs (Document, View, Range, Cursor)
+- **references/json-config-utils.md** - JSON configuration loading/saving utilities
+- **references/configuration-reference.md** - KConfig/KSharedConfig patterns and migration
+- **references/interface-patterns.md** - C++ interface-based design and thread-safe storage
+- **references/permission-system.md** - Permission management and access control patterns
+- **references/testing-patterns.md** - QTest patterns and mock interface implementations
 
 ## References
 

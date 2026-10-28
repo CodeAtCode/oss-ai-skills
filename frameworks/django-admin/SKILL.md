@@ -12,6 +12,8 @@ metadata:
     - optimization
 ---
 
+> **Objective:** Use this skill to prevent data loss, N+1 query performance issues, and admin security gaps by enforcing correct save_formset tuple shapes, queryset optimization patterns, and per-role formset filtering.
+
 # Django Admin
 
 Specialized guide for Django Admin customization - save hooks, formsets, queryset optimization, and security considerations.

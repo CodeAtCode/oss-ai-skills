@@ -14,6 +14,8 @@ metadata:
     - tdd
 ---
 
+> **Objective:** Use this skill to prevent flaky UI tests and missed race conditions by enforcing qtbot fixture patterns, exact-state assertions, and presenter-pattern separation for testable logic.
+
 # PyQt Testing - pytest-qt
 
 Comprehensive guide to testing Qt applications with pytest-qt.

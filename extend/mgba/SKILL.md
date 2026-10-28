@@ -17,6 +17,8 @@ metadata:
 
 Lua scripting for mGBA emulator.
 
+> **Objective:** Use this skill to reduce [desynced-TAS runs, memory-read misalignment bugs, frame-callback race incidents, save-state-corruption losses] by enforcing [frame-accurate discipline, address-validation rules, callback-ordering patterns below].
+
 ## Overview
 
 Starting with version 0.10, mGBA has built-in scripting capabilities. To use scripting, click "Scripting..." from the Tools menu. Currently, only Lua scripting is supported.
@@ -53,16 +55,20 @@ This opens a console where you can load and run Lua scripts.
 
 ### Console Output
 
+Do use `console.log/warn/error` for debugging because script errors don't crash the emulator.
+
 ```lua
 console.log("Info message")
 console.warn("Warning message")
 console.error("Error message")
 
--- Create text buffer
+-- Create text buffer for persistent display
 buffer = console.createBuffer("My Buffer")
 buffer:print("Text in buffer")
 buffer:clear()
 ```
+
+See `references/classes-registers.md` for TextBuffer class details.
 
 ### Utility Functions
 
@@ -78,6 +84,8 @@ mask = util.makeBitmask({0, 3, 5})  -- 0x29
 
 ### ROM Operations
 
+Do validate ROM loaded before operations because calling API on unloaded game returns nil.
+
 ```lua
 -- Load ROM file
 success = emu.loadFile("path/to/rom.gba")
@@ -92,6 +100,8 @@ checksum = emu.checksum()  -- CRC32
 
 ### Save States
 
+Do save state before risky operations because crashes lose progress. Do use slots (0-9) for quick saves because file I/O is slow.
+
 ```lua
 -- Save to file
 emu.saveStateFile("path/to/state.state")
@@ -103,7 +113,7 @@ emu.loadStateFile("path/to/state.state")
 emu.saveStateSlot(0)
 emu.loadStateSlot(0)
 
--- Save/load buffer
+-- Save/load buffer (faster for frequent saves)
 buffer = emu.saveStateBuffer()
 emu.loadStateBuffer(buffer)
 
@@ -112,7 +122,11 @@ emu.loadStateBuffer(buffer)
 emu.saveStateSlot(0, 31)  -- Save everything
 ```
 
+See `references/networking.md` for save state flag constants.
+
 ### Frame Control
+
+Do run frames in callbacks because manual stepping desyncs TAS runs.
 
 ```lua
 -- Run one frame
@@ -130,6 +144,8 @@ freq = emu.frequency()         -- Cycles per second
 ```
 
 ### Input Handling
+
+Do clear keys every frame because held keys accumulate and break TAS precision. Do handle input in frame callbacks because timing matters for frame-perfect inputs.
 
 ```lua
 -- Set all keys at once
@@ -150,37 +166,13 @@ end
 keys = emu.getKeys()
 ```
 
-### GBA Key Constants
-
-```lua
-C.GBA_KEY.A      = 0
-C.GBA_KEY.B      = 1
-C.GBA_KEY.SELECT = 2
-C.GBA_KEY.START  = 3
-C.GBA_KEY.RIGHT  = 4
-C.GBA_KEY.LEFT   = 5
-C.GBA_KEY.UP     = 6
-C.GBA_KEY.DOWN   = 7
-C.GBA_KEY.R      = 8
-C.GBA_KEY.L      = 9
-```
-
-### Game Boy Key Constants
-
-```lua
-C.GB_KEY.A       = 0
-C.GB_KEY.B       = 1
-C.GB_KEY.SELECT  = 2
-C.GB_KEY.START   = 3
-C.GB_KEY.RIGHT   = 4
-C.GB_KEY.LEFT    = 5
-C.GB_KEY.UP      = 6
-C.GB_KEY.DOWN    = 7
-```
+See `references/examples.md` for input patterns (button masher, auto-farmer, TAS helper).
 
 ## Memory Access
 
 ### Reading Memory
+
+Do validate addresses against ROM map before reading because wrong offsets read garbage and desync the TAS.
 
 ```lua
 -- Read 8/16/32 bit values
@@ -199,6 +191,8 @@ data = rom:readRange(offset, length)
 
 ### Writing Memory
 
+Do write to RAM domains only because ROM writes corrupt the cartridge image.
+
 ```lua
 -- Write 8/16/32 bit values
 emu.write8(address, value)
@@ -207,6 +201,8 @@ emu.write32(address, value)
 ```
 
 ### Memory Domains (GBA)
+
+Do use named domains because raw addresses are error-prone.
 
 ```lua
 -- Available memory domains
@@ -234,9 +230,13 @@ emu.memory["io"]     -- MMIO ($ff00)
 emu.memory["hram"]   -- HRAM ($ff80)
 ```
 
+See `references/classes-registers.md` for MemoryDomain class methods and ROM analysis examples.
+
 ## Callbacks
 
 ### Adding Callbacks
+
+Do register frame callbacks before emulation starts because late registration misses the first vblank and desyncs frame counters. Do store callback IDs because you need them to remove callbacks later.
 
 ```lua
 -- Add callback (returns callback ID)
@@ -277,6 +277,8 @@ callbacks.remove(id)
 
 ### Frame Callback Example
 
+Do clear keys after adding because held keys persist across frames.
+
 ```lua
 -- Auto-press A every 10 frames
 local counter = 0
@@ -284,12 +286,13 @@ callbacks.add("frame", function()
     counter = counter + 1
     if counter >= 10 then
         emu.addKeys(C.GBA_KEY.A)
-        counter = 0
     else
         emu.clearKeys(C.GBA_KEY.A)
     end
 end)
 ```
+
+See `references/examples.md` for complete callback patterns (RAM watch, save state timer, speedrunner splits, TAS record/playback).
 
 ## Deep Dives
 
@@ -306,6 +309,8 @@ Detailed reference material is available in the `references/` directory. Load th
 
 ### 1. Always Clear Keys
 
+Do clear keys every frame because held keys accumulate and cause unintended input.
+
 ```lua
 -- Bad: Keys stay pressed
 callbacks.add("frame", function()
@@ -321,16 +326,20 @@ end)
 
 ### 2. Use Frame Callback for Input
 
+Do handle input in frame callbacks because input timing must align with emulation cycle.
+
 ```lua
 -- Input should be handled in frame callback
 callbacks.add("frame", function()
-    if btnp(6) then  -- UP pressed this frame
+    if emu.getKey(6) == 1 then  -- UP pressed
         -- Handle input
     end
 end)
 ```
 
 ### 3. Watch for Crashes
+
+Do register crash handler because unhandled crashes lose unsaved state.
 
 ```lua
 callbacks.add("crashed", function()
@@ -342,94 +351,52 @@ end)
 
 ### 4. Reset State on Script Load
 
+Do clear previous state when loading script because stale callbacks and keys persist.
+
 ```lua
 -- Clear any previous state when loading
 emu.clearKeys(0xFFFF)
 callbacks.remove(cbid)  -- Remove old callbacks
 ```
 
+### 5. Validate Memory Addresses
+
+Do verify addresses before reading because wrong addresses return garbage data.
+
+```lua
+-- Check address is in valid range
+local wram = emu.memory["wram"]
+local base = wram:base()
+local bound = wram:bound()
+
+if addr >= base and addr < bound then
+    value = emu.read16(addr)
+else
+    console.error("Invalid address!")
+end
+```
+
+See `references/classes-registers.md` for MemoryDomain base/bound methods.
+
 ## Common Issues
 
 ### Address Not Found
 
-```lua
--- Some games use different RAM locations
--- Use mGBA's cheat search or memory viewer to find correct addresses
-```
+Some games use different RAM locations because memory layout varies by title. Use mGBA's cheat search or memory viewer to find correct addresses.
 
 ### Keys Not Working
 
+Some games poll keys differently because input handling varies. Try using addKeys instead of setKeys.
+
 ```lua
--- Some games poll keys differently
--- Try using addKeys instead of setKeys
 emu.addKeys(C.GBA_KEY.A)  -- OR with existing
 ```
 
 ### Socket Connection Timeout
 
-```lua
--- Socket connect is blocking!
--- Use connect with timeout or run in separate thread
--- For async, use callbacks and poll()
-```
+Socket connect is blocking because it waits for server response. Use connect with timeout or run in separate thread. For async, use callbacks and poll().
 
-## Complete API Reference
-
-### Core Methods Summary
-
-| Method | Description |
-|--------|-------------|
-| `loadFile(path)` | Load ROM file |
-| `getGameTitle()` | Get ROM title |
-| `getGameCode()` | Get ROM code |
-| `romSize()` | Get ROM size |
-| `platform()` | Get platform (GBA=0, GB=1) |
-| `checksum(type)` | Get ROM checksum |
-| `reset()` | Reset emulation |
-| `runFrame()` | Run one frame |
-| `step()` | Run one instruction |
-| `currentFrame()` | Get frame number |
-| `frameCycles()` | Cycles per frame |
-| `frequency()` | Cycles per second |
-| `screenshot(filename)` | Save screenshot |
-
-### Memory Methods Summary
-
-| Method | Description |
-|--------|-------------|
-| `read8(addr)` | Read 8-bit value |
-| `read16(addr)` | Read 16-bit value |
-| `read32(addr)` | Read 32-bit value |
-| `readRange(addr, len)` | Read byte range |
-| `write8(addr, val)` | Write 8-bit value |
-| `write16(addr, val)` | Write 16-bit value |
-| `write32(addr, val)` | Write 32-bit value |
-| `readRegister(name)` | Read CPU register |
-| `writeRegister(name, val)` | Write CPU register |
-
-### Input Methods Summary
-
-| Method | Description |
-|--------|-------------|
-| `setKeys(mask)` | Set key bitmask |
-| `addKeys(mask)` | Add keys to current |
-| `clearKeys(mask)` | Remove keys from current |
-| `addKey(key)` | Add single key |
-| `clearKey(key)` | Clear single key |
-| `getKey(key)` | Get key state |
-| `getKeys()` | Get all keys as mask |
-
-### Save State Methods Summary
-
-| Method | Description |
-|--------|-------------|
-| `saveStateFile(path, flags)` | Save to file |
-| `loadStateFile(path, flags)` | Load from file |
-| `saveStateSlot(slot, flags)` | Save to slot |
-| `loadStateSlot(slot, flags)` | Load from slot |
-| `saveStateBuffer(flags)` | Save to buffer |
-| `loadStateBuffer(buf, flags)` | Load from buffer |
-| `autoloadSave()` | Load associated save |
+See `references/networking.md` for socket patterns.
 
 ## References
 

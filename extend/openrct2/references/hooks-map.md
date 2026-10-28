@@ -1,6 +1,6 @@
-# Hooks and Map Access Reference
+> Loaded on demand from SKILL.md when the agent needs hooks or map access details.
 
-This reference file is loaded on demand from ../SKILL.md when hooks or map access details are needed.
+# Hooks and Map Access Reference
 
 ## Hooks (Events)
 

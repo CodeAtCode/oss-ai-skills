@@ -10,8 +10,9 @@ metadata:
     - image-processing
     - graphics
     - plugin
-    - gegl
 ---
+
+> **Objective:** Use this skill to reduce PDB-call-typed errors, image-ref-leak crashes, GEGL-op-misuse bugs, and batch-mode failures by enforcing procedure-registration discipline, image-lifecycle rules, GEGL-pipeline patterns, and batch-run-mode checks.
 
 # GIMP Plugin Development
 
@@ -182,244 +183,94 @@ class MyFilterPlugin(Gimp.PlugIn):
 Gimp.main(MyFilterPlugin.__gtype__, sys.argv)
 ```
 
-## Procedure Registration
+## Procedure Registration (Critical Patterns)
 
-### Procedure Types
+**Do validate procedure names at registration** because typos fail silently at runtime and the plugin appears unregistered.
 
-```python
-# Image procedure (operates on image)
-procedure = Gimp.ImageProcedure.new(
-    self, name,
-    Gimp.PDBProcType.PLUGIN,
-    callback, data
-)
+**Do set `set_image_types()` correctly** because mismatched types cause GIMP to hide the plugin from unsupported images.
 
-# Load procedure (file import)
-procedure = Gimp.LoadProcedure.new(
-    self, name,
-    Gimp.PDBProcType.PLUGIN,
-    callback, data
-)
+**Do use `add_argument_from_property()` for parameter binding** because it auto-generates UI widgets and validates types.
 
-# Save procedure (file export)
-procedure = Gimp.SaveProcedure.new(
-    self, name,
-    Gimp.PDBProcType.PLUGIN,
-    callback, data
-)
-
-# Brush procedure (create brushes)
-procedure = Gimp.BrushProcedure.new(
-    self, name,
-    Gimp.PDBProcType.PLUGIN,
-    callback, data
-)
-```
-
-### Menu Registration
-
-```python
-procedure.add_menu_path("<Image>/Filters/MyFilters/")
-procedure.add_menu_path("<Image>/Edit/")           # Edit menu
-procedure.add_menu_path("<Image>/Select/")         # Select menu
-procedure.add_menu_path("<Image>/View/")           # View menu
-procedure.add_menu_path("<Image>/Image/")          # Image menu
-procedure.add_menu_path("<Image>/Layer/")          # Layer menu
-procedure.add_menu_path("<Image>/Colors/")         # Colors menu
-procedure.add_menu_path("<Image>/Tools/")          # Tools menu
-procedure.add_menu_path("<Filters>/")              # Filters menu
-procedure.add_menu_path("<Toolbox>/Xtns/")         # Extensions
-procedure.add_menu_path("<Image>/Filters/Custom/My Plugin")
-```
-
-### Image Types
-
-```python
-procedure.set_image_types("RGB*")       # RGB images (any alpha)
-procedure.set_image_types("RGBA")       # RGB with alpha only
-procedure.set_image_types("RGB,GRAY")   # RGB or grayscale
-procedure.set_image_types("*")          # All image types
-procedure.set_image_types("INDEXED*")   # Indexed images
-```
-
-### Parameters
-
-```python
-# Boolean
-procedure.add_argument(
-    GObject.param_spec_boolean(
-        "preview",
-        "Preview",
-        "Show preview",
-        True,  # default
-        GObject.ParamFlags.READWRITE
-    )
-)
-
-# Integer
-procedure.add_argument(
-    GObject.param_spec_int(
-        "radius",
-        "Radius",
-        "Blur radius in pixels",
-        1,    # min
-        100,  # max
-        5,    # default
-        GObject.ParamFlags.READWRITE
-    )
-)
-
-# Float/Double
-procedure.add_argument(
-    GObject.param_spec_double(
-        "amount",
-        "Amount",
-        "Effect amount (0-100)",
-        0.0,   # min
-        100.0, # max
-        50.0,  # default
-        GObject.ParamFlags.READWRITE
-    )
-)
-
-# String
-procedure.add_argument(
-    GObject.param_spec_string(
-        "text",
-        "Text",
-        "Text to render",
-        "",  # default
-        GObject.ParamFlags.READWRITE
-    )
-)
-
-# Enum
-from gi.repository import Gimp
-procedure.add_argument(
-    Gimp.param_spec_enum(
-        "blend-mode",
-        "Blend Mode",
-        "Layer blend mode",
-        Gimp.LayerMode.__gtype__,
-        Gimp.LayerMode.NORMAL,
-        GObject.ParamFlags.READWRITE
-    )
-)
-
-# Color
-procedure.add_argument(
-    Gimp.param_spec_rgb(
-        "color",
-        "Color",
-        "Foreground color",
-        True,  # has alpha
-        Gimp.RGBA(1.0, 0.0, 0.0, 1.0),  # default red
-        GObject.ParamFlags.READWRITE
-    )
-)
-```
+See `references/image-operations.md` for complete procedure types, menu paths, image type specifiers, and parameter API.
 
 ## Deep Dives
-
-For detailed reference material, load these files on demand:
 
 - **Image Operations, GEGL, and PDB** — `references/image-operations.md`: Drawable access, layer operations, selections, pixel access, GEGL operation graphs, and PDB procedure calls
 - **User Interface and Files** — `references/ui-and-files.md`: GTK dialogs, color pickers, file dialogs, progress bars, file load/save operations
 - **Complete Examples** — `references/complete-examples.md`: Full plugin implementations (batch resize, artistic filter)
 
-## Debugging
+## Critical Rules (Do X Because Y)
 
-### Logging and Messages
-
-```python
-# Show message in GIMP console
-Gimp.message("Debug message")
-
-# Log to terminal
-print("Debug output", file=sys.stderr)
-
-# Show in error console
-Gimp.message("Error occurred!")
-
-# Critical message (shows dialog)
-Gimp.critical("Critical error in plugin")
-```
-
-### Testing Plugin
-
-```bash
-# Run GIMP from terminal to see debug output
-gimp
-
-# Run with verbose output
-G_MESSAGES_DEBUG=all gimp
-
-# Check Python console in GIMP
-# Filters -> Python-Fu -> Console
-```
-
-## Best Practices
-
-### 1. Always Use Non-Interactive Mode for Batch
+**Do check run_mode before showing dialogs** because batch scripts fail when interactive dialogs block non-interactive execution.
 
 ```python
 if run_mode == Gimp.RunMode.NONINTERACTIVE:
-    # No dialogs, use default values
+    # Skip dialogs, use defaults
+    blur_radius = 5
+else:
+    # Show dialog
+    blur_radius = show_settings_dialog()
+```
+
+**Do call `Gimp.displays_flush()` after drawable changes** because GIMP won't refresh the canvas otherwise, leaving users seeing stale data.
+
+**Do wrap operations in undo groups** because single-step undo prevents users from reverting multi-operation plugins.
+
+```python
+Gimp.image_undo_group_start(image)
+try:
+    # Multiple layer operations
     pass
-elif run_mode == Gimp.RunMode.INTERACTIVE:
-    # Show dialog for user input
+finally:
+    Gimp.image_undo_group_end(image)
+```
+
+**Do return proper error values with `procedure.new_return_values()`** because returning bare values breaks GIMP's procedure result parsing.
+
+**Do catch exceptions and return `EXECUTION_ERROR`** because uncaught exceptions crash the Python interpreter without reporting the error to GIMP.
+
+**Do run GIMP from terminal** because stderr output (print statements, tracebacks) only appears there, not in the GUI console.
+
+```bash
+gimp                    # See print() output
+G_MESSAGES_DEBUG=all gimp  # See GLib/GObject debug messages
+```
+
+**Do use `Gimp.message()` for user-facing errors** because it displays in GIMP's interface while `print()` only goes to terminal.
+
+**Do check run_mode before showing dialogs** because batch scripts fail when interactive dialogs block non-interactive execution.
+
+```python
+if run_mode == Gimp.RunMode.NONINTERACTIVE:
+    # Skip dialogs, use defaults
+    blur_radius = 5
+else:
+    # Show dialog
+    blur_radius = show_settings_dialog()
+```
+
+**Do call `Gimp.displays_flush()` after drawable changes** because GIMP won't refresh the canvas otherwise, leaving users seeing stale data.
+
+**Do wrap operations in undo groups** because single-step undo prevents users from reverting multi-operation plugins.
+
+```python
+Gimp.image_undo_group_start(image)
+try:
+    # Multiple layer operations
     pass
+finally:
+    Gimp.image_undo_group_end(image)
 ```
 
-### 2. Clean Up Resources
+**Do return proper error values with `procedure.new_return_values()`** because returning bare values breaks GIMP's procedure result parsing.
 
-```python
-def my_plugin(procedure, run_mode, image, n_drawables, drawables, args, data):
-    try:
-        # Do work
-        pass
-    finally:
-        Gimp.progress_end()
-        Gimp.displays_flush()
+**Do catch exceptions and return `EXECUTION_ERROR`** because uncaught exceptions crash the Python interpreter without reporting the error to GIMP.
+
+## Debugging
+
+**Do run GIMP from terminal** because stderr output (print statements, tracebacks) only appears there, not in the GUI console.
+
+```bash
+gimp                    # See print() output
+G_MESSAGES_DEBUG=all gimp  # See GLib/GObject debug messages
 ```
-
-### 3. Undo Groups
-
-```python
-def with_undo(image):
-    # Start undo group
-    Gimp.image_undo_group_start(image)
-    
-    try:
-        # Do operations
-        pass
-    finally:
-        # End undo group
-        Gimp.image_undo_group_end(image)
-```
-
-### 4. Handle Exceptions
-
-```python
-def my_plugin(procedure, run_mode, image, n_drawables, drawables, args, data):
-    try:
-        # Plugin logic
-        return procedure.new_return_values(
-            Gimp.PDBStatusType.SUCCESS, 
-            GLib.Error()
-        )
-    except Exception as e:
-        Gimp.message(f"Error: {str(e)}")
-        return procedure.new_return_values(
-            Gimp.PDBStatusType.EXECUTION_ERROR,
-            GLib.Error.new_literal(Gimp.PlugIn.error_quark(), str(e), 0)
-        )
-```
-
-## References
-
-- **GIMP Documentation**: https://docs.gimp.org/
-- **GIMP Python Documentation**: https://www.gimp.org/docs/python/
-- **GEGL Operations Reference**: https://gegl.org/operations/
-- **GTK 3 Tutorial**: https://python-gtk-3-tutorial.readthedocs.io/
-- **GIMP Developer Wiki**: https://wiki.gimp.org/

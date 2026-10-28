@@ -14,6 +14,8 @@ metadata:
     - scripting
 ---
 
+> **Objective:** Use this skill to reduce desynced multiplayer actions, ES5-transpilation failures, event-hook leak incidents, and game-action rejection bugs by enforcing action-validation discipline, ES5-compatible patterns, and hook-cleanup rules below.
+
 # OpenRCT2 Plugin Development
 
 Develop plugins (scripts) for OpenRCT2 using JavaScript/TypeScript to extend the game with custom windows, game actions, event hooks, and multiplayer features.
@@ -39,76 +41,12 @@ Place `.js` files in the `plugin` directory:
 
 Access via game: **Red toolbox button → Open custom content folder**
 
-## Plugin Template
-
-### Basic Plugin Structure
-
-```javascript
-function main() {
-    console.log("Your plugin has started!");
-    // Your plugin code here
-}
-
-registerPlugin({
-    name: 'Your Plugin',
-    version: '1.0',
-    authors: ['Your Name'],
-    type: 'remote',
-    licence: 'MIT',
-    targetApiVersion: 34,
-    minApiVersion: 10,
-    main: main
-});
-```
-
-### TypeScript Setup
-
-```typescript
-// Install TypeScript and types
-// npm install typescript --save-dev
-// Copy openrct2.d.ts to your project
-
-/// <reference path="openrct2.d.ts" />
-
-function main() {
-    console.log("TypeScript plugin loaded!");
-}
-
-registerPlugin({
-    name: 'My TypeScript Plugin',
-    version: '1.0',
-    authors: ['Developer'],
-    type: 'local',
-    licence: 'MIT',
-    targetApiVersion: 34,
-    main: main
-});
-```
-
-### tsconfig.json
-
-```json
-{
-    "compilerOptions": {
-        "target": "ES5",
-        "module": "none",
-        "outFile": "./dist/plugin.js",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules"]
-}
-```
-
 ## Plugin Types
 
-### Local Plugins
-
-Load on any client with plugin installed. Cannot alter game state directly.
+Do **do not mutate game state in local plugins because the server rejects direct mutations in multiplayer**. Use game actions instead.
 
 ```javascript
+// Local plugin - info windows only
 registerPlugin({
     name: 'Local Info Plugin',
     version: '1.0',
@@ -120,11 +58,10 @@ registerPlugin({
 });
 ```
 
-### Remote Plugins
-
-Load only on server, distributed to clients. Can mutate game state in execute context.
+Remote plugins load only on server and distribute to clients. **Mutate game state only in the execute context of custom game actions because that is the only server-side entry point**.
 
 ```javascript
+// Remote plugin - server-side state mutation
 registerPlugin({
     name: 'Remote Game Plugin',
     version: '1.0',
@@ -135,11 +72,10 @@ registerPlugin({
 });
 ```
 
-### Intransient Plugins
-
-Stay loaded across park changes and in title screen.
+Intransient plugins stay loaded across park changes and in title screen. **Use `context.sharedStorage` for persistence because park storage clears on park load**.
 
 ```javascript
+// Intransient plugin - persistent across parks
 registerPlugin({
     name: 'Global Plugin',
     version: '1.0',
@@ -155,61 +91,9 @@ registerPlugin({
 
 Game actions are the **recommended way** to mutate game state, ensuring multiplayer synchronization.
 
-### Using Built-in Game Actions
+### Validate Game Action Args Before Execute Because the Server Rejects Invalid Actions and Desyncs Multiplayer
 
-```javascript
-var action = {
-    type: 'smallsceneryplace',
-    args: {
-        object: 0,           // Scenery object ID
-        x: 32 * 10,          // X coordinate in map units
-        y: 32 * 10,          // Y coordinate in map units
-        z: 0,                // Z height
-        direction: 0,        // Rotation (0-3)
-        quadrant: 0,         // Quadrant for quarter tile scenery
-        primaryColour: 0,    // Primary color
-        secondaryColour: 0   // Secondary color
-    }
-};
-
-context.executeAction(action, function(result) {
-    if (result.error) {
-        console.log("Failed to place scenery: " + result.error);
-    } else {
-        console.log("Scenery placed successfully");
-    }
-});
-```
-
-### Common Built-in Actions
-
-```javascript
-// Set park cash
-context.executeAction({
-    type: 'parksetcash',
-    args: { cash: 100000 }
-}, callback);
-
-// Set guest count
-context.executeAction({
-    type: 'parksetguestgenerationrate',
-    args: { generationRate: 100 }
-}, callback);
-
-// Change land height
-context.executeAction({
-    type: 'landsetheight',
-    args: { x: 32 * 10, y: 32 * 10, height: 10 }
-}, callback);
-
-// Build ride
-context.executeAction({
-    type: 'trackplace',
-    args: { ride: 0, trackType: 1, x: 32 * 10, y: 32 * 10, z: 0, direction: 0 }
-}, callback);
-```
-
-### Custom Game Actions
+Custom game actions must implement both `query` (validation) and `execute` (mutation). The `query` phase runs client-side to check permissions and args; `execute` runs server-side to mutate state.
 
 ```javascript
 context.registerAction({
@@ -222,6 +106,13 @@ context.registerAction({
         if (args.amount > 100000) {
             return { error: 'Amount too large' };
         }
+        // Check permissions in multiplayer
+        if (network.mode !== 'none') {
+            var player = network.getPlayer(args.playerId);
+            if (!player || !player.hasPermission('modify_park')) {
+                return { error: 'No permission' };
+            }
+        }
         return {};  // Success
     },
     execute: function(args) {
@@ -230,120 +121,58 @@ context.registerAction({
         return {};  // Success
     }
 });
-
-// Use custom action
-context.executeAction({
-    type: 'myplugin.award_cash',
-    args: { amount: 5000 }
-}, function(result) {
-    console.log(result.error || "Cash awarded!");
-});
 ```
 
-### Permission Checks
-
-```javascript
-context.registerAction({
-    id: 'myplugin.admin_action',
-    query: function(args) {
-        // Check player permissions
-        if (network.mode !== 'none') {
-            var player = network.getPlayer(args.playerId);
-            if (!player || !player.hasPermission('modify_park')) {
-                return { error: 'No permission' };
-            }
-        }
-        return {};
-    },
-    execute: function(args) {
-        // Perform action
-    }
-});
-```
+See `references/game-actions.md` for built-in action type tables and argument schemas.
 
 ## Best Practices
 
-### 1. Check UI Availability
+### Check UI Availability Because Headless Servers Lack the UI API
 
-```javascript
-function main() {
-    if (typeof ui !== 'undefined') {
-        ui.registerMenuItem('My Window', openWindow);
-    }
-    context.subscribe('interval.day', onDay);
-}
-```
+Do check `typeof ui !== 'undefined'` before using UI APIs because headless servers crash on undefined API access.
 
-### 2. Use Game Actions for Mutations
+### Use Game Actions for Mutations Because Direct State Changes Fail in Multiplayer
 
-```javascript
-// Good: Use game action
-context.executeAction({
-    type: 'parksetcash',
-    args: { cash: 100000 }
-}, callback);
+Do use `context.executeAction()` for all state mutations because direct property assignments like `park.cash =` are rejected by the server in multiplayer.
 
-// Bad: Direct mutation in local plugin
-// park.cash = 100000;  // Will fail in multiplayer!
-```
+### Namespace Your Data Because Unnamespaced Keys Conflict Across Plugins
 
-### 3. Namespace Your Data
+Do use namespaced keys like `MyPlugin.Settings.Enabled` instead of `Settings.Enabled` because multiple plugins writing to the same key will overwrite each other's data.
 
-Use namespaced keys to avoid conflicts. See `references/network-storage.md` for full storage API details.
+### Handle Errors Because Action Failures Must Be Logged
 
-### 4. Handle Errors
+Do check `result.error` in every action callback because failed actions silent without error handling make debugging impossible.
 
-```javascript
-context.executeAction(action, function(result) {
-    if (result.error) {
-        console.log('Action failed: ' + result.error);
-        return;
-    }
-    // Success handling
-});
-```
+### Clean Up On Unload Because Event Hooks Leak Memory
 
-### 5. Clean Up on Unload
-
-```javascript
-var intervals = [];
-
-function main() {
-    intervals.push(context.setInterval(update, 1000));
-}
-
-context.subscribe('map.changed', function() {
-    intervals.forEach(clearInterval);
-    intervals = [];
-});
-```
+Do track all `context.setInterval()` IDs and call `clearInterval()` on the `plugin.unloaded` event because unsubscribed hooks continue running after plugin reload, causing memory leaks and duplicate executions.
 
 ## ES5 Limitations
 
-OpenRCT2 uses Duktape (ES5). ES6+ features require transpilation.
+OpenRCT2 uses Duktape (ES5). ES6+ features require transpilation. **Avoid arrow functions because the ES5 runtime transpilation fails on them**.
 
 ### Not Supported
 
 ```javascript
-// Arrow functions - NO
+// Arrow functions - transpilation fails
 var func = () => {};
 
-// Classes - NO
+// Classes - transpilation fails
 class MyClass {}
 
-// let/const - NO
+// let/const - transpilation fails
 let x = 1;
 
-// Template literals - NO
+// Template literals - transpilation fails
 `Hello ${name}`
 
-// Spread operator - NO
+// Spread operator - transpilation fails
 [...arr]
 
-// Destructuring - NO
+// Destructuring - transpilation fails
 var { x } = obj;
 
-// find/includes - NO
+// find/includes - transpilation fails
 arr.find(x => x > 0);
 arr.includes(5);
 ```
@@ -351,19 +180,19 @@ arr.includes(5);
 ### ES5 Alternatives
 
 ```javascript
-// Function expressions - YES
+// Function expressions - works
 var func = function() {};
 
-// Constructor functions - YES
+// Constructor functions - works
 function MyClass() {}
 
-// var - YES
+// var - works
 var x = 1;
 
-// String concatenation - YES
+// String concatenation - works
 'Hello ' + name
 
-// Array methods - YES
+// Array methods - works
 arr.filter(function(x) { return x > 0; })[0];
 arr.indexOf(5) !== -1;
 ```
@@ -390,9 +219,10 @@ registerPlugin({
 
 Load these reference files on demand for detailed API information:
 
-- **UI Development** - Window creation, widgets (ListView, GroupBox, tabs), events → `references/ui.md`
+- **Window and Widget UI** - Window creation, widgets (ListView, GroupBox, tabs), events → `references/ui.md`
 - **Hooks and Map Access** - Event subscriptions, park info, map tiles, rides, entities → `references/hooks-map.md`
 - **Network, Storage, Hot Reload, Debugging** - TCP sockets, storage APIs, development workflow → `references/network-storage.md`
+- **Game Actions Reference** - Built-in action types, argument schemas, custom action patterns → `references/game-actions.md`
 
 ## References
 

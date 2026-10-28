@@ -1,4 +1,4 @@
-<!-- This file is loaded on demand from ../SKILL.md -->
+> Loaded on demand from SKILL.md when the agent needs plasmapkg2 CLI commands, package creation, or KDE Store submission workflow.
 
 # Packaging & Publishing Reference
 

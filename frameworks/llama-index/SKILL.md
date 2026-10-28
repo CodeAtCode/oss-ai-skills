@@ -15,6 +15,8 @@ metadata:
     - agents
 ---
 
+> **Objective:** Use this skill to prevent retrieval quality failures and RAG pipeline bugs by enforcing chunking discipline, metadata attachment at ingest, and retrieval debugging patterns below.
+
 # LlamaIndex Development
 
 Complete guide for building RAG applications with LlamaIndex framework.
@@ -253,14 +255,19 @@ splitter = SentenceSplitter(
 
 ### Metadata to Attach at Ingest Time
 
-Metadata enables filtering and improves retrieval precision. Attach these at ingest:
-
 | Metadata Field | Why It Matters |
 |----------------|----------------|
 | `source` (file path) | Cite exact document when answering |
 | `section_heading` | Preserve document hierarchy in context |
 | `page_number` | Critical for PDFs and scanned documents |
 | `document_date` | Filter by recency for time-sensitive queries |
+| `tenant_id` / `PROJECT_KEY` | Multi-tenant isolation via metadata filters |
+
+**Do attach these at ingest:**
+- `source` — Cite exact document when answering
+- `section_heading` — Preserve document hierarchy in context
+- `page_number` — Critical for PDFs and scanned documents
+- `tenant_id` — Multi-tenant isolation via metadata filters
 | `tenant_id` / `PROJECT_KEY` | Multi-tenant isolation via metadata filters |
 
 ```python
@@ -326,12 +333,10 @@ chroma_collection = db.get_or_create_collection("my-index")
 # 2. Wrap as LlamaIndex vector store
 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
-
-# 3. Create index with storage context
-index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
-```
-
 **Backend-specific notes:**
+- ChromaDB: Use `PersistentClient` for local storage, `EphemeralClient` for testing
+- Pinecone: Create index with matching embedding dimensions (1536 for text-embedding-3-small) because mismatched dimensions cause index corruption
+- Qdrant: Specify `collection_name` and ensure vector size matches embed_model
 - ChromaDB: Use `PersistentClient` for local storage, `EphemeralClient` for testing
 - Pinecone: Create index with matching embedding dimensions (1536 for text-embedding-3-small)
 - Qdrant: Specify `collection_name` and ensure vector size matches embed_model

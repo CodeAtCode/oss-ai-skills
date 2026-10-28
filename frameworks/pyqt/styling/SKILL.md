@@ -15,6 +15,8 @@ metadata:
     - themes
 ---
 
+> **Objective:** Use this skill to prevent cross-platform rendering bugs and style inconsistencies by enforcing QSS-specific syntax, platform-aware theming, and proper cascade discipline.
+
 # PyQt Styling - QSS (Qt Style Sheets)
 
 QSS (Qt Style Sheets) is Qt's styling system. It resembles CSS but has critical differences that cause cross-platform bugs.
@@ -421,9 +423,11 @@ QScrollBar::sub-line:vertical {
 4. **Prefer delegates for complex rendering** - Don't fight QSS for gradients, animations, or platform-independent drawing
 5. **Verify border-radius clipping** - Use masks or custom paintEvent if children must respect rounded corners
 6. **Block signals during bulk updates** - `widget.blockSignals(True)` before batch changes, then `blockSignals(False)`
-
 ## References
 
+- **Qt Style Sheets**: https://doc.qt.io/qtforpython-6/overviews/stylesheet.html (reference for QSS syntax and supported properties)
+- **QSS Reference**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-reference.html (lookup property support before using)
+- **Qt Examples**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-examples.html (see working QSS patterns)
 - **Qt Style Sheets**: https://doc.qt.io/qtforpython-6/overviews/stylesheet.html
 - **QSS Reference**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-reference.html
 - **Qt Examples**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-examples.html

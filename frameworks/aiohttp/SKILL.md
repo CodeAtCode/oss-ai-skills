@@ -10,8 +10,9 @@ metadata:
     - async
     - server
     - websocket
-    - sse
 ---
+
+> **Objective:** Use this skill to prevent socket exhaustion, connection leaks, and hung requests in async Python HTTP services by enforcing session reuse, timeout configuration, and proper resource lifecycle management.
 
 # aiohttp
 
@@ -236,11 +237,13 @@ asyncio.run(fetch_data())
 
 ### Connection Pooling Configuration
 
+**Do configure TCPConnector explicitly because default settings cause socket exhaustion under load.**
+
 ```python
 import aiohttp
 
-# Default connector (often insufficient for production)
-# session = aiohttp.ClientSession()  # ❌ BAD: Uses defaults
+# ❌ BAD: Default connector (often insufficient for production)
+# session = aiohttp.ClientSession()
 
 # Production-ready connector
 connector = aiohttp.TCPConnector(

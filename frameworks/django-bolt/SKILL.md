@@ -7,6 +7,8 @@ metadata:
   tags: python, django, bolt, api, rust, performance, async
 ---
 
+> **Objective:** Use this skill to prevent async ORM blocking, WebSocket resource leaks, and performance regressions in Django Bolt APIs by enforcing async query patterns, connection lifecycle management, and msgspec serializer discipline.
+
 # Django Bolt
 
 Django Bolt is a high-performance Django framework that bypasses the Python GIL using Rust, delivering **300k+ RPS** for simple endpoints.
@@ -21,12 +23,12 @@ Django Bolt combines Django's ORM and ecosystem with Rust's performance. Built o
 
 Key features:
 
-- **Async ORM** - Native async/await support for Django ORM
-- **Built-in WebSocket** - Real-time communication without channels
-- **SSE Streaming** - Server-Sent Events for live updates
-- **JWT Authentication** - Built-in auth with refresh token rotation
-- **msgspec Serializers** - Fast schema validation and serialization
-- **OpenAPI Docs** - Auto-generated at `/docs`
+- **Async ORM** - Use `aget()`, `alist()`, `acreate()` because sync ORM in async handlers blocks the event loop
+- **Built-in WebSocket** - Real-time communication without channels (no django-channels complexity)
+- **SSE Streaming** - Server-Sent Events for live updates because polling wastes resources
+- **JWT Authentication** - Built-in auth with refresh token rotation to prevent token replay attacks
+- **msgspec Serializers** - Fast schema validation and serialization because Pydantic adds 5-10x overhead
+- **OpenAPI Docs** - Auto-generated at `/docs` for API discoverability
 
 ---
 

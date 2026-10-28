@@ -1,6 +1,6 @@
 # Codecs & Platforms
 
-Loaded on demand from ../SKILL.md
+> Loaded on demand from `SKILL.md` when the agent needs platform-specific codec support tables, installation commands for Linux/Windows/macOS, and format compatibility guides.
 
 ## Supported Codecs by Platform
 

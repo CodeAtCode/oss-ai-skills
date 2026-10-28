@@ -1,5 +1,6 @@
-# Multiplayer Link Cable Protocol
+> Loaded on demand from SKILL.md when the agent needs packet formats, binary I/O, or client-server sync patterns.
 
+# Multiplayer Link Cable Protocol
 > This reference file is loaded on demand from ../SKILL.md
 
 ## Hardware

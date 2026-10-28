@@ -14,365 +14,115 @@ metadata:
     - desktop
 ---
 
+> **Objective:** Use this skill to reduce plasmoid-load failures, metadata-schema rejections, QML-binding-loop freezes, and packaging errors by enforcing metadata-discipline, QML-lifecycle rules, and plasmapkg2-verification patterns below.
+
 # KDE Plasmoid Development with Python
 
-Complete guide for developing Plasma widgets (Plasmoids) using Python backend with QML UI layer.
+Build Plasma 6 widgets with Python backend + QML UI.
 
-## Overview
+**Important**: Native Python Plasmoids (PyKDE4/PyKDE5) are deprecated in Plasma 6. Use QML UI + Python backend via QObject.
 
-**Important**: Native Python Plasmoids (PyKDE4/PyKDE5) are **deprecated** in Plasma 6. Modern Plasmoids must use:
-- **UI Layer**: QML with Kirigami components
-- **Backend Logic**: Python (PySide6 or PyQt6) via QObject subclasses
+See `references/plasmoid-structure.md` for complete structure, metadata.json schema, and dependency listings.
 
-### Architecture
+## Python Backend Rules
 
-```
-┌─────────────────────────────────────┐
-│         QML UI Layer                │
-│   (PlasmoidItem + Kirigami)         │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│       Python Backend Logic          │
-│   (QObject-derived classes)         │
-└─────────────────────────────────────┘
-```
+**Do subclass QObject** because QML requires QObject-derived types for property/signal exposure.
 
-## Version Requirements
-
-| Component | Version |
-|-----------|---------|
-| Plasma | 6.x |
-| Qt | 6.x |
-| Python | 3.8+ |
-| PySide6/PyQt6 | 6.x |
-
-## Dependencies
-
-### System Packages
-
-```bash
-# Arch/Manjaro
-sudo pacman -S python-pyqt6 pyside6 kirigami plasma-framework plasma-sdk
-
-# Fedora
-sudo dnf install python3-pyqt6 python3-pyside6 kf6-kirigami-devel plasma-framework plasma-sdk
-
-# Debian/Ubuntu
-sudo apt install python3-pyqt6 python3-pyside6 kirigami-devel plasma-framework plasma-sdk
-
-# openSUSE
-sudo zypper install python3-qt6 python3-pyside6 kf6-kirigami-devel plasma-framework
-```
-
-### Python Packages
-
-```bash
-pip install psutil requests pydbus
-```
-
-## Plasmoid Structure
-
-```
-my-plasmoid/
-├── package/
-│   ├── contents/
-│   │   ├── config/
-│   │   │   ├── config.qml
-│   │   │   └── main.xml
-│   │   ├── ui/
-│   │   │   ├── main.qml
-│   │   │   └── configGeneral.qml
-│   │   └── main.xml
-│   └── metadata.json
-├── src/
-│   ├── __init__.py
-│   └── backend.py
-├── README.md
-└── LICENSE
-```
-
-## Python Backend
-
-### Basic Backend Class
-
+**Do emit signals after property changes** because QML bindings only update on signal emission:
 ```python
-#!/usr/bin/env python3
-"""Python backend for Plasma widget"""
+dataUpdated = Signal()
 
-from PySide6.QtCore import QObject, Signal, Slot, Property
-# OR PyQt6:
-# from PyQt6.QtCore import QObject, pyqtSignal as Signal, pyqtSlot as Slot, pyqtProperty as Property
+@Property(str, notify=dataUpdated)
+def data(self):
+    return self._data
 
-class WidgetBackend(QObject):
-    """Backend logic exposed to QML"""
-    
-    # Signals
-    dataUpdated = Signal()
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._data = "Initial Value"
-        self._count = 0
-    
-    # Properties (exposed to QML)
-    @Property(str, notify=dataUpdated)
-    def data(self):
-        return self._data
-    
-    @data.setter
-    def data(self, value):
-        if self._data != value:
-            self._data = value
-            self.dataUpdated.emit()
-    
-    @Property(int, notify=dataUpdated)
-    def count(self):
-        return self._count
-    
-    # Slots (callable from QML)
-    @Slot(result=str)
-    def getData(self):
-        return self._data
-    
-    @Slot(str)
-    def setData(self, value):
-        self.data = value
-    
-    @Slot(str, result=str)
-    def processData(self, inputText):
-        """Process input and return result"""
-        return f"Processed: {inputText}"
-    
-    @Slot()
-    def refresh(self):
-        """Refresh data"""
-        self._count += 1
-        self._data = f"Updated #{self._count}"
-        self.dataUpdated.emit()
-    
-    @Slot(str, result=str)
-    def getSystemInfo(self, category):
-        """Get system information"""
-        import psutil
-        
-        if category == "cpu":
-            return f"{psutil.cpu_percent():.1f}%"
-        elif category == "memory":
-            mem = psutil.virtual_memory()
-            return f"{mem.percent:.1f}%"
-        elif category == "disk":
-            disk = psutil.disk_usage('/')
-            return f"{disk.percent:.1f}%"
-        return "Unknown"
+@data.setter
+def data(self, value):
+    if self._data != value:
+        self._data = value
+        self.dataUpdated.emit()  # ← Required for QML update
 ```
 
-### PySide6 vs PyQt6
+**Do use @Slot for QML-callable methods** because unmarked methods may fail cross-language calls.
 
-| Feature | PySide6 | PyQt6 |
-|---------|---------|-------|
-| Signal | `Signal` | `pyqtSignal` |
-| Slot | `Slot` | `pyqtSlot` |
-| Property | `Property` | `pyqtProperty` |
-| License | LGPL | GPL |
-| QML Registration | `@QmlElement` decorator | `qmlRegisterType()` |
+**Do initialize all properties in __init__** because QML accesses properties before any other initialization.
 
-**PySide6 Registration:**
-```python
-from PySide6.QtQml import QmlElement
+See `references/python-backend.md` for PySide6/PyQt6 registration syntax and signal/slot patterns.
 
-QML_IMPORT_NAME = "com.example.widget"
-QML_IMPORT_MAJOR_VERSION = 1
+## QML UI Rules
 
-@QmlElement
-class WidgetBackend(QObject):
-    pass
-```
-
-**PyQt6 Registration:**
-```python
-from PyQt6.QtQml import qmlRegisterType
-
-qmlRegisterType(WidgetBackend, "com.example.widget", 1, 0, "WidgetBackend")
-```
-
-## QML UI
-
-### main.qml
-
+**Do use Kirigami units for all sizing** because hardcoded values break HiDPI scaling:
 ```qml
-import QtQuick
-import QtQuick.Layouts
-import org.kde.plasma.plasmoid
-import org.kde.plasma.components 3.0 as PlasmaComponents3
-import org.kde.plasma.core 2.0 as PlasmaCore
-import org.kde.kirigami 2.0 as Kirigami
-import com.example.widget 1.0
+// ✅ GOOD
+width: Kirigami.Units.gridUnit * 10
+spacing: Kirigami.Units.smallSpacing
 
-PlasmoidItem {
-    id: root
-    
-    // Backend instance
-    WidgetBackend {
-        id: backend
-    }
-    
-    // Full representation (expanded widget)
-    Plasmoid.fullRepresentation: Kirigami.Card {
-        implicitWidth: Kirigami.Units.gridUnit * 20
-        implicitHeight: Kirigami.Units.gridUnit * 15
-        
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
-            spacing: Kirigami.Units.smallSpacing
-            
-            // Title
-            PlasmaComponents3.Label {
-                text: Plasmoid.configuration.customLabel || "My Widget"
-                font.bold: true
-                font.pointSize: Kirigami.Units.gridUnit * 1.2
-                Layout.fillWidth: true
-            }
-            
-            // Data display
-            PlasmaComponents3.Label {
-                text: backend.data
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-            }
-            
-            // System info
-            RowLayout {
-                Layout.fillWidth: true
-                
-                PlasmaComponents3.Label {
-                    text: "CPU: " + backend.getSystemInfo("cpu")
-                }
-                
-                PlasmaComponents3.Label {
-                    text: "RAM: " + backend.getSystemInfo("memory")
-                }
-            }
-            
-            // Input field
-            PlasmaComponents3.TextField {
-                id: inputField
-                placeholderText: "Enter text..."
-                Layout.fillWidth: true
-            }
-            
-            // Buttons
-            RowLayout {
-                Layout.fillWidth: true
-                
-                PlasmaComponents3.Button {
-                    text: "Process"
-                    onClicked: backend.processData(inputField.text)
-                }
-                
-                PlasmaComponents3.Button {
-                    text: "Refresh"
-                    icon.name: "view-refresh"
-                    onClicked: backend.refresh()
-                }
-            }
-        }
-    }
-    
-    // Compact representation (panel icon)
-    Plasmoid.compactRepresentation: PlasmaCore.IconItem {
-        source: Plasmoid.icon
-        anchors.centerIn: parent
-        
-        implicitWidth: {
-            if (Plasmoid.location === PlasmaCore.Types.HorizontalPanel ||
-                Plasmoid.location === PlasmaCore.Types.VerticalPanel) {
-                return Kirigami.Units.iconSizes.medium
-            }
-            return Kirigami.Units.iconSizes.large
-        }
-        implicitHeight: implicitWidth
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: Plasmoid.expanded = !Plasmoid.expanded
-        }
-    }
-    
-    // Tooltip
-    Plasmoid.toolTipMainText: "My Widget"
-    Plasmoid.toolTipSubText: backend.data
-    
-    // Icon
-    Plasmoid.icon: "utilities-system-monitor"
-}
+// ❌ BAD - Won't scale on HiDPI
+width: 320
 ```
 
-### Plasma 6 QML Imports
-
+**Do provide fallback values for configuration** because missing config keys return undefined:
 ```qml
-// Correct Plasma 6 imports (no version numbers for most)
-import QtQuick
-import QtQuick.Layouts
-import org.kde.plasma.plasmoid
-import org.kde.plasma.components 3.0 as PlasmaComponents3
-import org.kde.plasma.core 2.0 as PlasmaCore
-import org.kde.kirigami 2.0 as Kirigami
+text: plasmoid.configuration.customLabel || "Default"
 ```
+
+**Do use `Plasmoid.fullRepresentation` for expanded view** because Plasma routes expanded clicks there.
+
+**Do use `Plasmoid.compactRepresentation` for panel mode** because panel widgets need compact UI.
+
+**Do use Plasma 6 imports (no version for plasmoid/core)** because versioned imports break on Plasma 6:
+```qml
+import org.kde.plasma.plasmoid           // ✅ No version
+import org.kde.plasma.components 3.0     // ✅ Components need version
+import org.kde.plasma.core 2.0           // ✅ Core needs version
+import org.kde.kirigami 2.0              // ✅ Kirigami needs version
+```
+
+See `references/qml-ui.md` for complete main.qml template and representation patterns.
 
 ## Best Practices
 
-### Python Backend
-
+**Do use signal-based updates** because polling wastes CPU cycles:
 ```python
-# ✅ GOOD: Signal-based updates
 class Backend(QObject):
     dataChanged = Signal()
     
     def updateData(self):
         self._data = compute()
-        self.dataChanged.emit()
+        self.dataChanged.emit()  # ← Notify QML only when changed
+```
 
-# ✅ GOOD: Lazy initialization
+**Do use lazy initialization for expensive data** because repeated computation freezes the UI:
+```python
 @Slot(result=str)
 def expensiveData(self):
     if not hasattr(self, '_cached'):
         self._cached = self._computeExpensive()
     return self._cached
+```
 
-# ❌ BAD: Blocking main thread
+**Do use QTimer for periodic updates** because manual loops block the event loop:
+```python
+self._timer = QTimer()
+self._timer.timeout.connect(self.refresh)
+self._timer.start(60000)  # 60 seconds
+```
+
+**Do avoid blocking the main thread** because QML waits for slot completion:
+```python
+# ❌ BAD - Blocks UI for 5 seconds
 @Slot(result=str)
 def slowOperation(self):
-    time.sleep(5)  # Blocks UI
+    time.sleep(5)  # Freezes widget!
 ```
 
-### QML UI
-
+**Do avoid implicit QML bindings on heavy properties** because binding loops freeze the widget:
 ```qml
-// ✅ GOOD: Use Kirigami units for scaling
-width: Kirigami.Units.gridUnit * 10
-spacing: Kirigami.Units.smallSpacing
+// ❌ BAD - Re-evaluates on every frame
+width: computeExpensiveWidth()  // Called constantly!
 
-// ✅ GOOD: Handle configuration defaults
-text: plasmoid.configuration.label || i18n("Default")
-
-// ❌ BAD: Hardcoded values
-width: 320  // Won't scale on HiDPI
-```
-
-### Performance
-
-```python
-# Use Timer for periodic updates
-from PySide6.QtCore import QTimer
-
-class Backend(QObject):
-    def __init__(self):
-        self._timer = QTimer()
-        self._timer.timeout.connect(self.refresh)
-        self._timer.start(60000)  # 60 seconds
+// ✅ GOOD - Evaluates once, updates on signal
+width: backend.calculatedWidth
 ```
 
 ## Deep Dives

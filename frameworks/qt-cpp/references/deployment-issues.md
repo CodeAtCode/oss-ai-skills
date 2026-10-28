@@ -1,4 +1,4 @@
-This reference file is loaded on demand from ../SKILL.md.
+> Loaded on demand from `SKILL.md` when the agent needs deployment tools and common issue resolution.
 
 # Deployment and Common Issues
 

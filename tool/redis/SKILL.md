@@ -17,6 +17,8 @@ metadata:
     - asyncio
 ---
 
+> **Objective:** Use this skill to prevent memory exhaustion, race conditions, and cache staleness in Redis deployments by enforcing TTL discipline, atomicity patterns, and cache-aside strategies below.
+
 # Redis (redis-py v8.0)
 
 Redis - in-memory data structure store, used as database, cache, and message broker.
@@ -77,8 +79,9 @@ client = r.asyncio  # Property
 import redis.asyncio as redis
 r = redis.Redis()
 ```
-
 ## Connection Pool
+
+**Do create a connection pool for production:**
 
 ```python
 # Create a connection pool
@@ -93,6 +96,9 @@ pool = redis.ConnectionPool(
     retry_on_timeout=True,
 )
 
+# Use pool with client
+r = redis.Redis(connection_pool=pool)
+```
 # Use pool with client
 r = redis.Redis(connection_pool=pool)
 ```
@@ -248,21 +254,26 @@ r.json().del_('/user:1', Path('$.age'))
 ```python
 r.ts().create('sensor:1')
 r.ts().add('sensor:1', '*', 25.3)
-r.ts().range('sensor:1', 0, '*')
-aggregated = r.ts().range('sensor:1', 0, '*', agg_type='avg', bucket_size=60000)
-```
-
 ## Pipelines
 
+**Do use pipelines for batch operations:**
+
 ```python
-# Basic pipeline
+# Basic pipeline - fast but NOT atomic
 pipe = r.pipeline()
 pipe.set('key1', 'value1')
 pipe.set('key2', 'value2')
 pipe.get('key1')
 results = pipe.execute()  # [True, True, b'value1']
 
-# Watch for transactions
+# Watch for transactions - optimistic locking
+pipe = r.pipeline(True)
+pipe.watch('mykey')
+val = pipe.get('mykey')
+pipe.multi()
+pipe.set('mykey', val + 1)
+pipe.execute()  # Raises WatchError if key changed
+```
 pipe = r.pipeline(True)
 pipe.watch('mykey')
 val = pipe.get('mykey')
@@ -525,45 +536,28 @@ Many caching use cases don't need Redis. If your access patterns are simple and 
 
 ### Job Queues Belong to a Dedicated Broker
 
-Redis can power job queues, but dedicated brokers (RabbitMQ, SQS, Bull) provide:
-- Message acknowledgment and retry
-- Dead letter queues
-- Priority queues
-- Better visibility and monitoring
+## When Not to Use Redis
+
+Not every workload benefits from Redis. Know when to choose alternatives.
+
+**Use database instead of Redis when:**
+- Query patterns are straightforward (primary key lookups, indexed searches)
+- Data consistency is critical over speed
+- You already have connection pooling and query caching in place
 
 **Use a dedicated broker when:**
 - Jobs must not be lost
 - Complex routing or priority is needed
 - You need visibility into queue depth and processing
 
-### Caching Pages Nobody Requests
-
-Caching costs memory. If a page is rarely accessed, caching it wastes memory and adds complexity.
-
 **Cache only when:**
 - Hit rate is high (>80%)
 - Computation/cache miss is expensive
 - Data is read-heavy, write-light
 
-### Multi-Region Writes Need Different Consistency
-
-Redis is primarily single-primary. Multi-region active-active setups require different consistency models.
-
-**Consider alternatives when:**
-- You need true multi-region writes with low latency
-- Strong consistency across regions is required
-- Conflict resolution is complex
-
 ## Django Integration
 
-Django-specific patterns (django-redis cache backend, invalidation on model save, per-user rate limiting, Celery broker, Channels) live in `references/django-integration.md`.
-
-## Deep Dives
-
-Load these reference files on demand for specific use cases:
-
-- `references/django-integration.md` — When working with Django projects (cache backend, invalidation, rate limiting, Celery, Channels)
-
+Django-specific patterns live in `references/django-integration.md`.
 ## CLI Operations
 
 ```bash

@@ -1,4 +1,4 @@
-This reference file is loaded on demand from ../SKILL.md.
+> Loaded on demand from `SKILL.md` when the agent needs QThread, QThreadPool, QtConcurrent, and moveToThread patterns.
 
 # Threading
 

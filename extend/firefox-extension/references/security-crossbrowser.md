@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs CSP rules and cross-browser polyfill patterns.
+
 # Security & Cross-Browser Compatibility
 
 > This reference file is loaded on demand from ../SKILL.md.

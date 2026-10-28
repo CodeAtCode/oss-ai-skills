@@ -13,6 +13,8 @@ metadata:
 
 # BPCore Engine Skill
 
+> **Objective:** Use this skill to reduce SRAM-corruption incidents, sprite-flicker bugs, link-cable desync, and tilemap-tearing crashes by enforcing save-format discipline, VRAM-budget rules, and sync-protocol patterns below.
+
 Comprehensive guide for building Gameboy Advance games using the BPCore Engine Lua framework.
 
 ## Overview
@@ -21,121 +23,44 @@ BPCore Engine (Blind jumP Core Engine) is a Lua game framework for GBA that comb
 
 The engine provides sprite rendering, tile-based graphics, entity management with collision, button input, UTF-8 text, audio, save/load via SRAM, and multiplayer through the link cable. The build system uses Lua to package resources into ROM.
 
-## API Reference
+## Deep Dives
 
-### Entity Functions
+Complex topics are split into reference files loaded on demand from `SKILL.md`:
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `ent()` | `ent()` | Create entity, returns handle |
-| `entpos(e, x, y)` | `entpos(e, x, y)` | Set position, returns self |
-| `entz(e, z)` | `entz(e, z)` | Set Z-order (0-255), returns self |
-| `entspr(e, sprite, xflip, yflip)` | `entspr(e, sprite, xflip, yflip)` | Set sprite and flips, returns self |
-| `entspd(e, x, y)` | `entspd(e, x, y)` | Set movement speed, returns self |
-| `entslot(e, slot, value)` | `entslot(e, slot, value)` | Store in slot, returns self |
-| `entslots(e, count)` | `entslots(e, count)` | Allocate slots, returns self |
-| `entanim(e, start, len, rate)` | `entanim(e, start, len, rate)` | Set animation |
-| `entag(e, tag)` | `entag(e, tag)` | Set collision tag, returns self |
-| `enthb(e, ox, oy, w, h)` | `enthb(e, ox, oy, w, h)` | Set hitbox, returns self |
-| `del(e, auto?)` | `del(e, [auto])` | Delete entity |
-| `ents()` | `ents()` | Get all entities table |
+- **API Reference** — All 60+ engine functions with signatures → [`references/api-reference.md`](references/api-reference.md)
+- **Save/Load to SRAM** — Persistent storage patterns, checksums, marker bytes → [`references/save-load.md`](references/save-load.md)
+- **Multiplayer Link Cable Protocol** — Packet formats, binary I/O, client-server sync → [`references/multiplayer.md`](references/multiplayer.md)
+- **Optimization & Camera** — Sprite batching, entity pools, parallax scrolling → [`references/optimization.md`](references/optimization.md)
+- **Error Handling** — Bounds checking, validation patterns → [`references/error-handling.md`](references/error-handling.md)
 
-### Sprite & Tile Functions
+## Critical Rules (do X because Y)
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `txtr(layer_id, filename)` | `txtr(layer_id, filename)` | Load texture from file |
-| `txtr(layer_id, ptr, len)` | `txtr(layer_id, ptr, len)` | Load from pointer/length |
-| `file(filename)` | `file(filename)` | Get file pointer/length |
-| `spr(sprite_id, x, y)` | `spr(sprite_id, x, y)` | Draw sprite |
-| `spr(sprite_id, x, y, xflip, yflip)` | `spr(sprite_id, x, y, xflip, yflip)` | Draw with flips |
-| `tile(layer_id, x, y, num?)` | `tile(layer_id, x, y, [num])` | Draw/read tile |
-| `tilemap(f, layer, w, h, dx, dy, sx, sy)` | `tilemap(f, layer, w, h, dx, dy, sx, sy)` | Load CSV tilemap |
-| `clear()` | `clear()` | Clear sprites, VSync |
-| `display()` | `display()` | Send sprites to display |
-| `fade(amount, color?, tl?, bg?)` | `fade(amount, [color], [tl], [bg])` | Fade layers |
+### Memory & VRAM Discipline
 
-### Camera & Scroll
+- **Pre-allocate entity pools before runtime because** runtime allocation during gameplay causes frame stalls and can exhaust the 128-entity limit mid-level.
+- **Batch stationary sprites into a single draw loop because** scattered spr() calls across update logic increase CPU overhead and risk missing vblank deadlines.
+- **Keep tile updates under 10 per frame because** each tile() call writes to VRAM during active display, causing visible tearing if it hits vblank.
+- **Distribute sprites vertically across scanlines because** GBA can only render ~10 sprites per scanline; exceeding this causes flickering on crowded rows.
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `camera(x, y)` | `camera(x, y)` | Set camera center |
-| `scroll(layer, x, y)` | `scroll(layer, x, y)` | Set layer scroll |
-| `priority(s, bg, t0, t1)` | `priority(s, bg, t0, t1)` | Set render priority |
+### SRAM Save/Load Discipline
 
-### Collision
+- **Validate save data size before SRAM write because** oversized data corrupts adjacent save slots and can overwrite the marker byte.
+- **Write checksums after every save because** SRAM bit-flips during power loss leave corrupted data that loads silently without validation.
+- **Verify marker byte (0x42) before loading because** loading uninitialized SRAM returns garbage that crashes game logic expecting valid state.
+- **Use atomic writes (temp buffer then commit) because** power loss mid-write leaves partial data that passes checksum but contains torn state.
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `ecolle(e1, e2)` | `ecolle(e1, e2)` | Check collision (bool) |
-| `ecoll(e, tag)` | `ecoll(e, tag)` | Find tag matches (array) |
-| `enthb(e)` | `enthb(e)` | Get hitbox (getter) |
+### Link Cable Multiplayer Discipline
 
-### Input
+- **Keep packets under 11 bytes because** the hardware queue rejects longer messages, causing silent send failures and desync.
+- **Drain recv() in a loop each frame because** unprocessed packets overflow the 64-packet receive queue, losing critical state updates.
+- **Handle disconnects by resetting game state because** stale connections send garbage after cable removal, corrupting opponent position tracking.
+- **Use client-server authority model because** dual-authority games desync when both players predict differently; one peer validates all inputs.
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `btn(num)` | `btn(num)` | Button held? (bool) |
-| `btnp(num)` | `btnp(num)` | Button pressed? (bool) |
-| `btnnp(num)` | `btnnp(num)` | Button released? (bool) |
+### Camera & Scrolling Discipline
 
-### Graphics
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `print(text, x, y, fg?, bg?)` | `print(text, x, y, [fg], [bg])` | Print to overlay |
-
-### Audio
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `music(f, offset?)` | `music(f, [offset])` | Play background music |
-| `sound(f, priority)` | `sound(f, priority)` | Play sound effect |
-
-### Memory
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `poke(addr, value)` | `poke(addr, value)` | Write byte |
-| `poke4(addr, value)` | `poke4(addr, value)` | Write 32-bit word |
-| `peek(addr)` | `peek(addr)` | Read byte |
-| `peek4(addr)` | `peek4(addr)` | Read 32-bit word |
-| `memput(addr, data)` | `memput(addr, data)` | Write to memory |
-| `memget(addr, len?)` | `memget(addr, [len])` | Read from memory |
-
-### System
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `delta()` | `delta()` | Microseconds since last call |
-| `sleep(frames)` | `sleep(frames)` | Sleep N frames |
-| `startup_time()` | `startup_time()` | Get boot time |
-| `fdog()` | `fdog()` | Feed watchdog timer |
-| `log(msg)` | `log(msg)` | Debug log |
-| `rline()` | `rline()` | Get raster line |
-| `flimit(fps)` | `flimit(fps)` | Set frame rate limit |
-| `next_script(filename)` | `next_script(filename)` | Switch Lua script |
-
-### Multiplayer
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `connect(timeout)` | `connect(timeout)` | Connect (blocking) |
-| `disconnect()` | `disconnect()` | Disconnect |
-| `send(data)` | `send(data)` | Send message (max 11 bytes) |
-| `recv()` | `recv()` | Receive message |
-| `send_iram(ptr)` | `send_iram(ptr)` | Send from IRAM |
-| `recv_iram(ptr)` | `recv_iram(ptr)` | Receive to IRAM |
-
-### Layer IDs
-
-| ID | Layer | Size | Description |
-|----|-------|------|-------------|
-| 0 | Overlay | 32x32 tiles | Front, persistent |
-| 1 | Tile Layer 1 | 64x64 tiles | Behind sprites, in front of tile_0 |
-| 2 | Tile Layer 0 | 64x64 tiles | Main background |
-| 3 | Background | 32x32 tiles | Back layer |
-| 4 | Sprites | Dynamic | On-top sprites |
+- **Clamp camera coordinates to world bounds because** unbounded camera(x, y) exposes blank VRAM edges when player reaches level limits.
+- **Update scroll() after camera() because** scroll offsets are relative to camera position; reversing the order causes parallax misalignment.
+- **Use fixed-point math for scroll interpolation because** GBA lacks FPU; floating-point emulation is slow and causes jittery camera movement.
 
 ## Installation & Project Structure
 
@@ -251,29 +176,13 @@ ffmpeg -i input.mp3 -ar 16000 -ac 1 -f s8 output.raw
 
 **Tilemap CSV**: Comma-separated tile indices, each row is one tile row. Tile indices start at 1 (0 = empty).
 
-## Deep Dives
-
-Complex topics are split into reference files loaded on demand from `../SKILL.md`:
-
-- **Save/Load to SRAM** — Persistent storage patterns, checksums, marker bytes → [`references/save-load.md`](references/save-load.md)
-- **Multiplayer Link Cable Protocol** — Packet formats, binary I/O, client-server sync → [`references/multiplayer.md`](references/multiplayer.md)
-- **Optimization & Camera** — Sprite batching, entity pools, parallax scrolling → [`references/optimization.md`](references/optimization.md)
-- **Error Handling** — Bounds checking, validation patterns → [`references/error-handling.md`](references/error-handling.md)
-
-## Best Practices
-
-- **Memory management for sprites/tilemaps**: Pre-allocate entity pools to avoid runtime allocation; batch stationary sprites to reduce redraw calls; keep tile updates minimal per frame.
-- **Managing SRAM save limits**: SRAM is only 32KB—structure save data compactly; use checksums for corruption detection; validate save data before loading.
-- **Fixed-point math for GBA hardware**: GBA lacks FPU—use fixed-point arithmetic (e.g., multiply by 256 for 8.8 format); avoid division where possible.
-- **Keeping entity update loops bounded**: Process only active entities; use spatial partitioning for collision checks; cap entity count at 128.
-- **Using the link cable protocol carefully**: Keep packets under 11 bytes; process recv() in a loop to clear queue; handle disconnects gracefully.
-
 ## Troubleshooting
 
-- **Emulator vs hardware differences**: mGBA is accurate but timing may differ; test on real hardware for final verification.
-- **Sprite flickering (too many sprites per scanline)**: GBA has 128 sprite slots but only ~10 visible per scanline; distribute sprites vertically.
-- **Audio channel conflicts**: Only 3 sound channels + 1 music; prioritize important sounds using the priority parameter.
-- **Save data corruption**: Always write checksums; verify marker byte (0x42) before loading; use atomic writes (write to temp, then commit).
+- **Emulator vs hardware differences**: Test on real hardware because mGBA timing differs from actual GBA clock rates, causing race conditions in fast games.
+- **Sprite flickering (too many sprites per scanline)**: Redistribute sprites vertically because GBA hardware limits ~10 sprites per scanline; excess sprites blink on/off.
+- **Audio channel conflicts**: Prioritize player-hurt sounds at priority 95+ because only 3 SFX channels exist; lower-priority sounds drop silently.
+- **Save data corruption**: Write to temp offset then commit because power loss mid-write leaves partial data; atomic writes prevent torn state.
+- **Link cable desync**: Implement sequence numbers in packets because recv() queue reordering causes state rollback when packets arrive out of order.
 
 ## References
 
@@ -289,12 +198,9 @@ Complex topics are split into reference files loaded on demand from `../SKILL.md
 
 This skill covers BPCore Engine development for GBA:
 
-- **API Reference**: 60+ functions with signatures
+- **Critical Rules**: Memory/VRAM, SRAM, Multiplayer, Camera discipline with failure modes
 - **Installation & Project Structure**: BPCoreEngine.gba sources, build process
-- **Save/Load to SRAM**: Persistent storage patterns
-- **Multiplayer Link Cable Protocol**: Packet formats, binary I/O
-- **Optimization Patterns**: Sprite batching, entity pools, audio mixing, state machines
-- **Camera & Scrolling**: Parallax, bounds
-- **Error Handling**: Validation, safe operations
+- **Deep Dives**: API reference, save/load, multiplayer, optimization, error handling
+- **Troubleshooting**: Emulator differences, sprite flickering, audio conflicts, save corruption, desync
 
 Refer to [official repository](https://github.com/evanbowman/BPCore-Engine) for updates.

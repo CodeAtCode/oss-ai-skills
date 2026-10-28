@@ -15,6 +15,8 @@ metadata:
     - boto3
 ---
 
+> **Objective:** Use this skill to prevent file overwrites, credential leaks, and cache invalidation bugs by enforcing filename sanitization, environment-based backend selection, and signed URL expiry patterns.
+
 # Django Storages
 
 Django package for cloud storage backends. Provides a unified API for storing files across different cloud providers.

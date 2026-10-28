@@ -12,6 +12,8 @@ metadata:
     - unit-test
 ---
 
+> **Objective:** Use this skill to prevent false-positive tests and fragile test suites by enforcing fixture discipline, exact-value assertions, and mutation-testing validation of assertion quality.
+
 # pytest
 
 Complete reference for Python testing with pytest.
@@ -584,11 +586,12 @@ Split into separate tests when behaviors differ. The real driver is setup cost: 
 
 ## Mutation Testing
 
-Coverage tells you which lines ran; mutation testing tells you if your tests would notice if those lines were wrong. Run `mutmut run` to mutate code and verify tests catch the changes, then `mutmut browse` to review survivors. A high-coverage suite with weak assertions scores badly here — see `references/mutation-testing.md` for the full workflow.
-
 ## References
 
-- **Official Documentation**: https://docs.pytest.org/
+- **Official Documentation**: https://docs.pytest.org/ (primary reference for all pytest features)
+- **GitHub Repository**: https://github.com/pytest-dev/pytest (report bugs, view source)
+- **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html (discover ecosystem plugins before writing custom solutions)
+- **Book**: "Python Testing with pytest" by Brian Okken (deep dive on advanced patterns)
 - **GitHub Repository**: https://github.com/pytest-dev/pytest
 - **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html
 - **Book**: "Python Testing with pytest" by Brian Okken

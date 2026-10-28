@@ -13,6 +13,7 @@ metadata:
     - bundle-size
 ---
 
+> **Objective:** Use this skill to prevent design token drift, bundle size bloat, and dark mode failures by enforcing @theme discipline, semantic token usage, and content detection patterns below.
 ## Overview
 
 Tailwind CSS v4 is a complete rewrite built on the Rust-based Oxide engine. Configuration moves from JavaScript to CSS via `@theme`.
@@ -78,6 +79,10 @@ That's it. No `@tailwind base/components/utilities` directives—they're gone.
 
 ### Token Definition Pattern
 
+### Token Definition Pattern
+
+**Do define tokens like this:**
+
 ```css
 @import "tailwindcss";
 
@@ -98,6 +103,10 @@ That's it. No `@tailwind base/components/utilities` directives—they're gone.
   --spacing-xl: 2rem;
 
   /* Typography */
+  --font-display: "Clash Display", sans-serif;
+  --font-body: "Satoshi", system-ui, sans-serif;
+}
+```
   --font-display: "Clash Display", sans-serif;
   --font-body: "Satoshi", system-ui, sans-serif;
 }
@@ -266,22 +275,20 @@ Or use CSS `color-scheme` with automatic contrast:
   }
 }
 ```
-
-## Bundle Size and Content Detection
-
 ### Content Detection in v4 (`@source`)
 
-v4 automatically scans your project. No `content` array needed. But you can explicitly add sources:
+v4 automatically scans your project. No `content` array needed. **Do explicitly add sources for non-JS templates:**
 
 ```css
 @import "tailwindcss";
 
 @source "../components/**/*.{js,ts,jsx,tsx,vue,svelte}";
 @source "../pages/**/*.{js,ts,jsx,tsx}";
+@source "../views/**/*.blade.php";  /* Blade templates */
+@source "../templates/**/*.html";   /* Generic HTML templates */
 ```
 
-**Rule:** Content scanning must cover **all template files**, not just JS. If you use Blade, EJS, Handlebars, or PHP templates, add them:
-
+**Rule:** Content scanning must cover **all template files**, not just JS. If you use Blade, EJS, Handlebars, or PHP templates, add them explicitly because the scanner won't discover them automatically.
 ```css
 @source "../views/**/*.blade.php";
 @source "../templates/**/*.html";

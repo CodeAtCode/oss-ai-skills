@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs authentication methods, pagination strategies, and error handling patterns.
+
 # Authentication, Pagination & Error Handling
 
 > This reference file is loaded on demand from the main django-ninja SKILL.md entry.

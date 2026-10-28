@@ -15,6 +15,8 @@ metadata:
     - qthread
 ---
 
+> **Objective:** Use this skill to prevent UI freezes, cross-thread crashes, and thread-leak memory bugs by enforcing the worker-object pattern, queued signal connections, and proper thread lifecycle cleanup.
+
 # PyQt Threading - Core Patterns
 
 ## Thread Safety Rules

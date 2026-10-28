@@ -10,8 +10,9 @@ metadata:
     - database
     - sql
     - alembic
-    - async
 ---
+
+> **Objective:** Use this skill to prevent N+1 query bugs, session lifecycle errors, and connection pool exhaustion in data layers by enforcing relationship loading strategies, transaction boundaries, and async patterns.
 
 # SQLAlchemy
 
@@ -227,7 +228,7 @@ See `references/queries.md` for joins, aggregations, CTEs, window functions, and
 | Strategy | Query Count | Row Duplication | When to Use |
 |----------|-------------|-----------------|-------------|
 | `lazy="select"` (default) | N+1 if iterated | No | **Avoid in production** - one extra query per relation |
-| `joinedload` | 1 query | **Yes** - duplicates parent columns | Scalar relations only (one-to-one, many-to-one) |
+| `joinedload` | 1 query | **Yes** - duplicates parent columns | Scalar relations only (one-to-one, many-to-one) — **do use joinedload only for scalar relations because it explodes row count on collections** |
 | `selectinload` | 2-3 queries | No | **Default recommendation** - efficient for collections |
 | `raiseload` | Raises error | No | Tests/debugging - catch lazy loads |
 | `noload` | 0 queries | No | Optional relations you never need |

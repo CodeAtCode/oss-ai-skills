@@ -1,6 +1,6 @@
-# Ecosystem and Compatibility Deep Dive
+> Loaded on demand from SKILL.md when the agent needs django-unfold-modal/markdown details, Django 6.x compatibility patches, and INSTALLED_APPS ordering notes.
 
-This file is loaded on demand from ../SKILL.md for ecosystem libraries and Django version compatibility notes.
+# Ecosystem and Compatibility Deep Dive
 
 ## Ecosystem Libraries
 

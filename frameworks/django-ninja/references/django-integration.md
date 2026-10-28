@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs Django ORM integration, middleware, signals, and production best practices.
+
 # Django Integration & Best Practices
 
 > This reference file is loaded on demand from the main django-ninja SKILL.md entry.

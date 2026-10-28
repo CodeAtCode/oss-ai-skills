@@ -17,231 +17,53 @@ metadata:
 
 Standard and custom dialog patterns for PyQt/PySide6 applications.
 
-## Standard Dialogs
+> **Objective:** Use this skill to reduce modal-deadlock incidents, rejected-input data loss, dialog-sizing regressions, native-vs-custom dialog mismatches by enforcing modal discipline (exec() vs open()), validation-at-boundary rules, and QDialogButtonBox usage patterns.
 
-### QFileDialog
+## Modal vs Modeless Discipline
 
-```python
-from PySide6.QtWidgets import QFileDialog
+**Use `exec()` for modal dialogs because** `open()` returns immediately and callers race to access results before the user responds.
 
-# Open single file
-filename, _ = QFileDialog.getOpenFileName(
-    self,
-    "Open File",
-    "/home/user",  # Starting directory
-    "Images (*.png *.jpg);;Text Files (*.txt);;All Files (*)"
-)
-
-if filename:
-    print(f"Selected: {filename}")
-
-# Save file
-filename, _ = QFileDialog.getSaveFileName(
-    self,
-    "Save File",
-    "/home/user/untitled.txt",
-    "Text Files (*.txt);;All Files (*)"
-)
-
-# Select directory
-directory = QFileDialog.getExistingDirectory(
-    self,
-    "Select Directory",
-    "/home/user",
-    QFileDialog.Option.ShowDirsOnly
-)
-
-# Open multiple files
-files, _ = QFileDialog.getOpenFileNames(
-    self,
-    "Open Files",
-    "/home/user",
-    "Images (*.png *.jpg)"
-)
-
-for f in files:
-    print(f)
-
-# Options
-options = QFileDialog.Option.DontUseNativeDialog  # Use Qt dialog instead of OS dialog
-filename, _ = QFileDialog.getOpenFileName(self, "Open", "", "", options=options)
-```
-
-### QMessageBox
+**Use `show()` for modeless dialogs because** blocking the UI prevents user interaction with other windows (search dialogs, find/replace).
 
 ```python
-from PySide6.QtWidgets import QMessageBox
+# ✅ Modal - blocks until user responds
+dialog = MyDialog(parent)
+if dialog.exec() == QDialog.Accepted:
+    values = dialog.get_values()  # Safe: user has already responded
 
-# Question dialog
-reply = QMessageBox.question(
-    self,
-    "Confirm",
-    "Are you sure?",
-    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-    QMessageBox.StandardButton.No
-)
+# ❌ BAD - race condition
+dialog = MyDialog(parent)
+dialog.open()  # Returns immediately
+values = dialog.get_values()  # May read stale data before user responds
 
-if reply == QMessageBox.StandardButton.Yes:
-    print("User confirmed")
-
-# Information
-QMessageBox.information(self, "Info", "Operation completed successfully")
-
-# Warning
-QMessageBox.warning(self, "Warning", "This action cannot be undone")
-
-# Critical error
-QMessageBox.critical(self, "Error", "Failed to connect to server")
-
-# About
-QMessageBox.about(self, "About", "My App v1.0\n\nCopyright 2024")
-
-# About Qt
-QMessageBox.aboutQt(self)
-
-# Custom buttons
-msg = QMessageBox(self)
-msg.setWindowTitle("Custom Dialog")
-msg.setText("Continue?")
-msg.setIcon(QMessageBox.Icon.Question)
-msg.addButton("Yes", QMessageBox.ButtonRole.YesRole)
-msg.addButton("No", QMessageBox.ButtonRole.NoRole)
-msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-
-result = msg.exec()
-print(f"Button role: {msg.buttonRole(msg.clickedButton())}")
+# ✅ Modeless - stays open, emits signals
+dialog = SearchDialog(parent)
+dialog.searchRequested.connect(self.perform_search)
+dialog.show()  # Non-blocking
 ```
 
-### QInputDialog
+## Standard Dialogs — Decision Guide
 
-```python
-from PySide6.QtWidgets import QInputDialog, QLineEdit
+### When to Use Each Dialog Type
 
-# Get text
-text, ok = QInputDialog.getText(
-    self,
-    "Input",
-    "Enter name:",
-    QLineEdit.EchoMode.Normal,
-    "Default value"
-)
+- **QFileDialog** — File/directory selection. Use static methods for simple cases; subclass for custom behavior.
+- **QMessageBox** — Confirmation, warnings, errors. Use static methods for quick yes/no/information.
+- **QInputDialog** — Simple user input (text, number, selection). Use when you need a single value.
+- **QColorDialog / QFontDialog** — Color/font selection. Use native dialogs for consistency.
+- **Custom QDialog** — Complex input, multi-field forms, multi-page wizards.
 
-if ok and text:
-    print(f"Name: {text}")
+### API Reference Relocation
 
-# Get integer
-value, ok = QInputDialog.getInt(
-    self,
-    "Input",
-    "Enter age:",
-    25,  # Default
-    0,   # Min
-    120, # Max
-    1    # Step
-)
-
-if ok:
-    print(f"Age: {value}")
-
-# Get double
-price, ok = QInputDialog.getDouble(
-    self,
-    "Input",
-    "Enter price:",
-    0.0,
-    0.0,
-    1000.0,
-    2  # Decimals
-)
-
-if ok:
-    print(f"Price: ${price:.2f}")
-
-# Get item from list
-items = ["Option 1", "Option 2", "Option 3"]
-item, ok = QInputDialog.getItem(
-    self,
-    "Select",
-    "Choose an option:",
-    items,
-    0,    # Current index
-    False # Editable
-)
-
-if ok:
-    print(f"Selected: {item}")
-
-# Get multiline text
-text, ok = QInputDialog.getMultiLineText(
-    self,
-    "Input",
-    "Enter description:",
-    "Default\ntext"
-)
-```
-
-### QColorDialog
-
-```python
-from PySide6.QtWidgets import QColorDialog
-from PySide6.QtGui import QColor
-
-# Get color
-color = QColorDialog.getColor(
-    QColor(255, 0, 0),  # Default color
-    self,
-    "Select Color"
-)
-
-if color.isValid():
-    print(f"Color: {color.name()}")  # "#ff0000"
-    widget.setStyleSheet(f"background-color: {color.name()};")
-
-# With alpha
-color = QColorDialog.getColor(
-    QColor(255, 0, 0, 128),
-    self,
-    "Select Color with Alpha",
-    QColorDialog.ColorDialogOption.ShowAlphaChannel
-)
-
-# Get color with options
-options = (
-    QColorDialog.ColorDialogOption.ShowAlphaChannel |
-    QColorDialog.ColorDialogOption.NoButtons
-)
-color = QColorDialog.getColor(Qt.white, self, "Color", options)
-```
-
-### QFontDialog
-
-```python
-from PySide6.QtWidgets import QFontDialog
-from PySide6.QtGui import QFont
-
-# Get font
-font, ok = QFontDialog.getFont(
-    QFont("Arial", 12),  # Default font
-    self,
-    "Select Font"
-)
-
-if ok:
-    print(f"Font: {font.family()}, Size: {font.pointSize()}")
-    widget.setFont(font)
-
-# With options
-font, ok = QFontDialog.getFont(
-    QFont(),
-    self,
-    "Select Font",
-    QFontDialog.FontDialogOption.MonospacedFonts
-)
-```
+See `references/qfiledialog-apis.md` for QFileDialog static method syntax.
+See `references/qmessagebox-apis.md` for QMessageBox button flags and message types.
+See `references/qinputdialog-apis.md` for QInputDialog input modes.
+See `references/color-font-dialogs.md` for QColorDialog and QFontDialog APIs.
 
 ## Custom Dialogs
 
-### Basic Custom Dialog
+### Basic Custom Dialog Pattern
+
+**Do subclass QDialog because** standard dialogs cannot handle complex multi-field forms or custom validation logic.
 
 ```python
 from PySide6.QtWidgets import (
@@ -253,7 +75,7 @@ class InputDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Input Dialog")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(400)  # Prevent undersizing
         
         layout = QVBoxLayout(self)
         
@@ -265,7 +87,7 @@ class InputDialog(QDialog):
         form.addRow("Email:", self.email_edit)
         layout.addLayout(form)
         
-        # Buttons
+        # Buttons - use QDialogButtonBox for correct platform ordering
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok |
             QDialogButtonBox.StandardButton.Cancel
@@ -279,21 +101,16 @@ class InputDialog(QDialog):
             "name": self.name_edit.text(),
             "email": self.email_edit.text()
         }
-    
-    def set_values(self, name="", email=""):
-        self.name_edit.setText(name)
-        self.email_edit.setText(email)
 
 # Usage
-dialog = InputDialog(self)
-dialog.set_values("John", "john@example.com")
-
-if dialog.exec() == QDialog.DialogCode.Accepted:
+dialog = InputDialog(parent)
+if dialog.exec() == QDialog.Accepted:
     values = dialog.get_values()
-    print(f"Name: {values['name']}, Email: {values['email']}")
 ```
 
-### Dialog with Validation
+### Validation at Boundary
+
+**Do validate in `try_accept()` before calling `accept()` because** accepted dialogs with invalid data propagate errors downstream and force callers to handle bad state.
 
 ```python
 class ValidatedDialog(QDialog):
@@ -303,7 +120,6 @@ class ValidatedDialog(QDialog):
         
         layout = QVBoxLayout(self)
         
-        # Input
         form = QFormLayout()
         self.age_spin = QSpinBox()
         self.age_spin.setRange(0, 120)
@@ -312,29 +128,27 @@ class ValidatedDialog(QDialog):
         form.addRow("Email:", self.email_edit)
         layout.addLayout(form)
         
-        # Error label
+        # Error label - show validation feedback
         self.error_label = QLabel()
         self.error_label.setStyleSheet("color: red;")
         layout.addWidget(self.error_label)
         
-        # Buttons
+        # Connect OK button to validation wrapper
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok |
             QDialogButtonBox.StandardButton.Cancel
         )
-        self.buttons.accepted.connect(self.try_accept)
+        self.buttons.accepted.connect(self.try_accept)  # NOT self.accept
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
     
     def try_accept(self):
+        """Validate before accepting — prevents invalid state propagation."""
         if not self.validate():
-            return
+            return  # Block accept() if validation fails
         self.accept()
     
     def validate(self):
-        import re
-        
-        # Validate email
         email = self.email_edit.text()
         if not email:
             self.error_label.setText("Email is required")
@@ -346,24 +160,21 @@ class ValidatedDialog(QDialog):
         
         self.error_label.clear()
         return True
-    
-    def get_values(self):
-        return {
-            "age": self.age_spin.value(),
-            "email": self.email_edit.text()
-        }
 ```
 
-### Modeless Dialog
+### Modeless Dialog Pattern
+
+**Do use signals for modeless dialogs because** the dialog needs to communicate results without blocking the parent or requiring polling.
 
 ```python
 class SearchDialog(QDialog):
-    """Non-modal (modeless) dialog that stays open."""
+    """Non-modal dialog that stays open and emits results via signals."""
     searchRequested = Signal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Search")
+        # Set window flags for modeless behavior
         self.setWindowFlags(
             Qt.WindowType.Dialog |
             Qt.WindowType.WindowCloseButtonHint
@@ -384,29 +195,33 @@ class SearchDialog(QDialog):
     def search(self):
         term = self.search_edit.text()
         if term:
-            self.searchRequested.emit(term)
+            self.searchRequested.emit(term)  # Signal result to parent
 
 # Usage
-search_dialog = SearchDialog(self)
-search_dialog.searchRequested.connect(self.perform_search)
-search_dialog.show()  # Use show() instead of exec() for modeless
+search_dialog = SearchDialog(parent)
+search_dialog.searchRequested.connect(parent.perform_search)
+search_dialog.show()  # Non-modal — dialog stays open
 ```
 
 ## Best Practices
 
-1. **Use standard dialogs when possible** - They're familiar and consistent
-2. **Provide sensible defaults** - Pre-fill common values
-3. **Validate input before accepting** - Show clear error messages
-4. **Use QDialogButtonBox** - Ensures correct button ordering per platform
-5. **Set minimum size** - Prevent dialogs from being too small
-6. **Consider modeless dialogs** - For search, find/replace, etc.
+1. **Use QDialogButtonBox for standard buttons because** it ensures correct button ordering per platform (OK/Cancel order varies by OS).
 
-## Qt 6 Dialogs
+2. **Always provide Cancel button because** users need an escape path; dialogs without cancel trap users in error states.
 
-### QDialog Modern Patterns
+3. **Pass parent to all dialogs because** dialogs without parents become orphaned windows that can appear behind main windows or lose modality.
+
+4. **Set minimum size on custom dialogs because** dialogs that are too small truncate content and create poor UX.
+
+5. **Validate before accept() because** downstream code assumes dialog data is valid after QDialog.Accepted.
+
+6. **Use exec() for modal, show() for modeless because** mixing them causes race conditions (exec() blocks, show() doesn't).
+
+## Qt 6 Modern Patterns
+
+### QDialog Setup Pattern
 
 ```python
-# ✅ GOOD: Use QDialog for custom dialogs
 class MyDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -415,100 +230,27 @@ class MyDialog(QDialog):
         
         layout = QVBoxLayout()
         # ... widgets ...
+        
+        # Use setLayout() instead of layout = ...; self.setLayout(layout)
         self.setLayout(layout)
         
-        # Confirm/Cancel buttons
+        # Standard button box
         btn_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
-        
-    def get_value(self):
-        if self.result() == QDialog.Accepted:
-            return self.value
-    
-    # Qt 6: add native buttons
-    # (replace QDialogButtonBox)
-    self.addNativeButton(QDialogButtonBox.StandardButton.Ok)
 ```
 
-### Modal vs Non-modal
+## Deep Dives
 
-```python
-# Modal (blocks parent)
-dialog = MyDialog(parent)
-result = dialog.exec()  # Blocks until closed
+For detailed API reference, see the following files loaded on demand:
 
-# Non-modal (doesn't block)
-dialog = MyDialog(parent)
-dialog.show()  # Doesn't block
-```
-
----
-
-### Best Practices Code Examples
-
-```python
-# ✅ GOOD: Always have Cancel button
-button_box = QDialogButtonBox(
-    QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-)
-
-# ✅ GOOD: Use QDialogButtonBox for standard buttons
-# Avoid manual QDialogButton instances
-
-# ✅ GOOD: Pass parent to dialogs
-dialog = QDialog(parent_window)
-
-# ❌ BAD: Creating dialogs without parent
-dialog = QDialog()  # No parent = orphaned
-```
-
----
-
-## Advanced Dialogs
-
-### Multi-page Dialog
-
-```python
-class MultiPageDialog(QDialog):
-    def __init__(self):
-        super().__init__()
-        self.pages = [Page1(), Page2(), Page3()]
-        
-        self.current_page = 0
-        self.setup_ui()
-    
-    def setup_ui(self):
-        main_layout = QVBoxLayout()
-        
-        # Page navigation
-        page_layout = QHBoxLayout()
-        prev_btn = QPushButton("← Prev")
-        next_btn = QPushButton("Next →")
-        prev_btn.clicked.connect(lambda: self.set_page(-1))
-        next_btn.clicked.connect(lambda: self.set_page(1))
-        page_layout.addWidget(prev_btn)
-        page_layout.addWidget(next_btn)
-        
-        self.page_container = QWidget()
-        self.page_container_layout = QVBoxLayout(self.page_container)
-        self.page_container_layout.addWidget(self.pages[0])
-        
-        main_layout.addLayout(page_layout)
-        main_layout.addWidget(self.page_container)
-        self.setLayout(main_layout)
-    
-    def set_page(self, delta):
-        self.current_page += delta
-        if 0 <= self.current_page < len(self.pages):
-            self.page_container_layout.deleteWidget(self.pages[0])
-            self.page_container_layout.addWidget(self.pages[self.current_page])
-        else:
-            self.current_page = max(0, min(len(self.pages)-1, self.current_page))
-```
+- `references/qfiledialog-apis.md` — QFileDialog static methods and options
+- `references/qmessagebox-apis.md` — QMessageBox button flags and message types
+- `references/qinputdialog-apis.md` — QInputDialog input modes
+- `references/color-font-dialogs.md` — QColorDialog and QFontDialog APIs
 
 ## References
 

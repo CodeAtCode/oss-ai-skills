@@ -1,6 +1,6 @@
-# Complete Plugin Examples Reference
+> Loaded on demand from SKILL.md when the agent needs full plugin implementation examples.
 
-This reference file is loaded on demand from ../SKILL.md for full plugin implementation examples.
+# Complete Plugin Examples Reference
 
 ## Complete Plugin Example
 

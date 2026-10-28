@@ -15,6 +15,8 @@ metadata:
     - lineagos
 ---
 
+> **Objective:** Use this skill to prevent Waydroid initialization failures, GPU/networking misconfiguration, and desktop integration issues by enforcing setup discipline and troubleshooting patterns below.
+
 # Waydroid
 
 Container-based Android for Linux with native Wayland integration.
@@ -152,9 +154,9 @@ sudo waydroid container start
 waydroid session start
 ```
 
-## Common Commands
-
 ### App Management
+
+**Do use these commands for app lifecycle:**
 
 ```bash
 waydroid app install /path/to/app.apk
@@ -162,8 +164,15 @@ waydroid app list
 waydroid app launch com.package.name
 waydroid app uninstall com.package.name
 ```
+waydroid shell pm list packages
+waydroid shell getprop ro.product.model
+waydroid shell su -c "ls -la /sdcard/"
+```
 
+### UI Control
 ### Shell Access
+
+**Do use shell for debugging inside Android:**
 
 ```bash
 waydroid shell
@@ -171,21 +180,6 @@ waydroid shell pm list packages
 waydroid shell getprop ro.product.model
 waydroid shell su -c "ls -la /sdcard/"
 ```
-
-### UI Control
-
-```bash
-waydroid show-full-ui
-waydroid screenshot
-waydroid window set <fullscreen|windowed|tablet> [position]
-```
-
-### Status and Info
-
-```bash
-waydroid status
-waydroid log
-waydroid log -cat main
 waydroid log -cat all
 waydroid prop get
 waydroid prop get ro.product.model

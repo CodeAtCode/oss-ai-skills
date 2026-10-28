@@ -1,6 +1,6 @@
-# Network, Storage, Hot Reload, and Debugging Reference
+> Loaded on demand from SKILL.md when the agent needs network, storage, or debugging details.
 
-This reference file is loaded on demand from ../SKILL.md when network, storage, or debugging details are needed.
+# Network, Storage, Hot Reload, and Debugging Reference
 
 ## Network API
 

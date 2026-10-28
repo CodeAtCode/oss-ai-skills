@@ -10,8 +10,9 @@ metadata:
     - 2d-games
     - pygame
     - graphics
-    - game-engine
 ---
+
+> **Objective:** Use this skill to prevent game loop instability, visual stuttering, and collision bugs in 2D games by enforcing delta-time discipline, fixed timesteps, and performance-conscious rendering.
 
 # Pygame
 
@@ -55,7 +56,7 @@ A game loop has three phases: **handle events** → **update simulation** → **
 
 **Critical pattern:** `dt = clock.tick(FPS) / 1000` without clamping lets a stalled frame (e.g., system suspend, GC pause) teleport entities through walls. A 5-second stall at 60 FPS yields `dt = 5.0`, moving a 100 px/s entity 500 pixels in one update.
 
-**Rule:** Always clamp `max_dt` to prevent tunneling.
+**Do always clamp `max_dt` because a stalled frame (system suspend, GC pause) can teleport entities through walls if delta time is unbounded.**
 
 ### Fixed Timestep with Render Interpolation
 
@@ -363,10 +364,11 @@ class AssetManager:
         # Opaque → convert(), transparent → convert_alpha()
 ```
 
+**Do call `convert()`/`convert_alpha()` at load time only because converting surfaces inside the game loop triggers garbage collection and causes stutter.**
+
 **Rule of thumb:**
 - `convert()`: Opaque images, no transparency (20-30% faster blit)
 - `convert_alpha()`: Images with alpha channels or colorkeys
-- Never call `convert()` inside the game loop
 
 ### set_alpha vs Alpha Channel
 

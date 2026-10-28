@@ -15,6 +15,8 @@ metadata:
     - sessions
 ---
 
+> **Objective:** Use this skill to reduce N+1 query incidents, SQL-injection exposure, migration-drift breakages, permission-bypass incidents by enforcing ORM loading discipline, parameterized-query rules, migration-contract checks, permission-decorator patterns below.
+
 # Django
 
 Comprehensive guide to Django covering security, ORM, PostgreSQL, GeoDjango, Django 6.0 essentials, admin extensions, and ecosystem tools.
@@ -51,19 +53,18 @@ Load these reference files on demand for detailed coverage:
 - ↳ **[external-api.md](references/external-api.md)** — Operational dashboards, external API integration
 - ↳ **[ecosystem.md](references/ecosystem.md)** — Django ecosystem libraries
 
----
+## Best Practices (Do X Because Y)
 
-## Best Practices
-
-1. **Always use {% csrf_token %}** in POST forms
-2. **Use HTTPS** in production (SECURE_SSL_REDIRECT = True)
-3. **Enable HSTS** for secure connections
-4. **Set secure cookies** (SESSION_COOKIE_SECURE = True)
-5. **Use strong password validation**
-6. **Use @login_required** for protected views
-7. **Never expose sensitive data** in URLs or logs
-8. **Validate file uploads** carefully
-9. **Use prepared statements** (Django ORM does this automatically)
+1. **Always use `{% csrf_token %}` in POST forms** because missing tokens allow malicious sites to submit forms on behalf of authenticated users (CSRF attacks)
+2. **Enable HTTPS with SECURE_SSL_REDIRECT = True** because unencrypted connections expose session cookies and user data to network eavesdroppers
+3. **Enable HSTS with SECURE_HSTS_SECONDS** because browsers that once visited over HTTPS should never fall back to HTTP (prevents downgrade attacks)
+4. **Set SESSION_COOKIE_SECURE = True** because cookies sent over HTTP can be intercepted and reused by attackers
+5. **Use @login_required or PermissionRequiredMixin** because unprotected views expose sensitive data to unauthenticated users
+6. **Validate file uploads with ALLOWED_EXTENSIONS** because malicious file uploads can execute server-side code (RCE)
+7. **Never interpolate user input into raw SQL - use ORM or %s formatting** because string interpolation enables SQL injection attacks
+8. **Use select_related for FK relationships** because accessing FK without it fires N+1 queries (one per row in templates)
+9. **Use prefetch_related for M2M/reverse FK** because JOINs without prefetching duplicate objects and explode memory usage
+10. **Audit dead references after field renames** because admin list_display, forms, and serializers silently break with old field names
 
 ---
 

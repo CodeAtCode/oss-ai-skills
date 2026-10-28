@@ -1,4 +1,4 @@
-<!-- This file is loaded on demand from ../SKILL.md -->
+> Loaded on demand from SKILL.md when the agent needs plasmoidtest usage, troubleshooting guide, or debug commands.
 
 # Testing & Debugging Reference
 

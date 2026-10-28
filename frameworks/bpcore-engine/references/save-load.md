@@ -1,5 +1,6 @@
-# Save/Load to SRAM
+> Loaded on demand from SKILL.md when the agent needs persistent storage patterns, checksums, or marker byte handling.
 
+# Save/Load to SRAM
 > This reference file is loaded on demand from ../SKILL.md
 
 ## SRAM Overview

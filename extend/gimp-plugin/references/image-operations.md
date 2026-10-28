@@ -1,6 +1,6 @@
-# Image Operations, GEGL, and PDB Reference
+> Loaded on demand from SKILL.md when the agent needs drawable access, layer operations, selections, pixel access, GEGL operation graphs, or PDB procedure calls.
 
-This reference file is loaded on demand from ../SKILL.md when working with image manipulation, GEGL operations, or PDB procedures.
+# Image Operations, GEGL, and PDB Reference
 
 ## Image Operations
 

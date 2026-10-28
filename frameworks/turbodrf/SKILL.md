@@ -10,8 +10,9 @@ metadata:
     - rest-api
     - openapi
     - serializers
-    - caching
 ---
+
+> **Objective:** Use this skill to prevent permission bypasses, tenant leakage, and misconfigured API endpoints in Django REST services by enforcing role-based access control, tenant scoping, and startup safety gates.
 
 # turbodrf
 
@@ -427,7 +428,7 @@ Users can only filter on fields they have read permission for.
 
 ### 5. Secure Sensitive Data
 
-Always include sensitive fields in the deny-list:
+**Do include sensitive fields in the deny-list because field exposure bypasses model-level access control.**
 
 ```python
 TURBODRF_SENSITIVE_FIELDS = [

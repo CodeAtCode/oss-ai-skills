@@ -13,6 +13,7 @@ metadata:
     - ast
 ---
 
+> **Objective:** Use this skill to prevent false positives in structural code search and catch security/correctness defects by enforcing pattern discipline, constraint usage, and rule authoring practices below.
 # ast-grep
 
 Fast and user-friendly tool for large-scale code searching, linting, and rewriting using AST patterns.
@@ -409,6 +410,8 @@ fi
 
 ### Pattern Search
 
+**Do test patterns before rewriting:**
+
 ```bash
 # Basic pattern search
 ast-grep run --pattern 'console.log($ARG)' --lang javascript src/
@@ -419,27 +422,22 @@ ast-grep -p 'console.log($$$ARGS)' src/
 # Show context around matches
 ast-grep -p 'TODO' --context 3 src/
 ```
-
+```bash
+# Search and rewrite
 ### Rewrite Operations
+
+**Do use interactive mode for important changes:**
 
 ```bash
 # Search and rewrite
 ast-grep -p '$OBJ.val && $OBJ.val()' --rewrite '$OBJ.val?.()' src/
 
-# Interactive mode
+# Interactive mode - confirm each replacement
 ast-grep -p '$PROP && $PROP()' -r '$PROP?.()' --interactive src/
 
-# Apply all without confirmation
+# Apply all without confirmation - use with caution
 ast-grep -p 'var $X' -r 'let $X' --update-all src/
 ```
-
-### Linting
-
-```bash
-# Scan with rules file
-ast-grep scan --rule rules/no-console.yml src/
-
-# Scan with config
 ast-grep scan --config sgconfig.yml src/
 
 # Inline rule

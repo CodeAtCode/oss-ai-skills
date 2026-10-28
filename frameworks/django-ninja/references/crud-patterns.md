@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs CRUD operations, bulk operations, and relationship handling.
+
 # CRUD Operations
 
 > This reference file is loaded on demand from the main django-ninja SKILL.md entry.

@@ -14,9 +14,9 @@ metadata:
     - layouts
 ---
 
-# PyQt Widgets - QtWidgets Module
+> **Objective:** Use this skill to reduce layout-breakage incidents (setGeometry + resize conflicts), event-handler bugs (missed accept()/ignore() calls), model-view sync failures (stale item references), and keyboard-shortcut conflicts (global filter overuse) by enforcing layout discipline, event-filter patterns, and model-view contract rules below.
 
-Comprehensive guide to Qt widgets and layout management.
+# PyQt Widgets - QtWidgets Module
 
 ## Display Widgets
 
@@ -415,39 +415,97 @@ stack.setCurrentWidget(page2)
 current = stack.currentIndex()
 ```
 
-## Best Practices
+## Layout Discipline
 
-### Layout
+**Do use layouts, not setGeometry, because resize events break fixed positions.**
 
 ```python
-# ✅ GOOD: Use layouts, not fixed positions
+# ✅ GOOD: Layouts adapt to resize
 layout = QVBoxLayout()
 layout.addWidget(button)
-
-# ❌ BAD: Hardcoded positions
-button.setGeometry(10, 10, 100, 30)
-
-# ✅ GOOD: Responsive layouts
 layout.setStretchFactor(widget, 1)  # Proportional sizing
 ```
 
-### Widget Creation
-
 ```python
-# ✅ GOOD: Reuse widgets
-class CustomButton(QPushButton):
-    def __init__(self, text):
-        super().__init__(text)
-        self.setMinimumSize(100, 40)
-
-# ❌ BAD: Create widgets in loops
-# Create outside loop, update in loop
+# ❌ BAD: Hardcoded positions fail on resize
+button.setGeometry(10, 10, 100, 30)
 ```
 
-### State Management
+**Do set size policies instead of fixed sizes because layouts need growth hints.**
 
 ```python
-# ✅ GOOD: Centralize state
+from PySide6.QtWidgets import QSizePolicy
+
+widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+```
+
+## Event Handling
+
+See references/event-handling.md for event handlers, event filters, and shortcuts.
+
+**Do call event.accept() in handlers because unaccepted events propagate up the tree.**
+
+```python
+class MyWidget(QWidget):
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            print("Left click at", event.pos())
+        event.accept()  # Stop propagation
+```
+
+**Do call event.ignore() in closeEvent because ignoring keeps the widget open.**
+
+```python
+def closeEvent(self, event):
+    reply = QMessageBox.question(
+        self, 'Exit',
+        'Are you sure?',
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    )
+    if reply == QMessageBox.StandardButton.Yes:
+        event.accept()
+    else:
+        event.ignore()  # Widget stays open
+```
+
+**Do install event filters on specific targets because global filters intercept every event and kill performance.**
+
+```python
+class MyWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.textEdit.installEventFilter(self)  # Target-specific
+    
+    def eventFilter(self, obj, event):
+        if obj == self.textEdit and event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Tab:
+                return True  # Consumed
+        return super().eventFilter(obj, event)
+```
+
+## Model-View Contract
+
+See references/item-views-layouts.md for QListWidget, QTreeWidget, QTableWidget, and layout management.
+
+**Do use data() / setData() for custom data because text() only stores display strings.**
+
+```python
+item.setData(Qt.ItemDataRole.UserRole, {"id": 123})
+data = item.data(Qt.ItemDataRole.UserRole)
+```
+
+**Do check for None before accessing table items because empty cells return None.**
+
+```python
+item = table.item(0, 0)
+text = item.text() if item else ""  # Avoid crash on empty cell
+```
+
+## State Management
+
+**Do centralize state in a dedicated class because scattered widget state creates sync bugs.**
+
+```python
 class AppState:
     def __init__(self):
         self.data_changed = Signal()
@@ -456,21 +514,9 @@ state = AppState()
 # Connect to signal for updates
 ```
 
-### Do:
-- Use layouts over fixed geometry
-- Set size policies, not fixed sizes
-- Use signals for communication
-
-### Don't:
-- Mix layout with setGeometry
-- Create widgets in tight loops
-- Hardcode sizes
-
----
-
 ## Deep Dives
 
-For detailed reference, see:
+See references for detailed content loaded on demand:
 - [Item Views and Layouts](references/item-views-layouts.md) - QListWidget, QTreeWidget, QTableWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, QStackedLayout
 - [Event Handling](references/event-handling.md) - Event handlers, event filters, keyboard/mouse shortcuts
 

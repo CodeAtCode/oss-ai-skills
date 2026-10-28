@@ -1,3 +1,5 @@
+> Loaded on demand from SKILL.md when the agent needs the AMO checklist, debugging commands, and troubleshooting table.
+
 # Testing, Debugging & AMO Submission
 
 > This reference file is loaded on demand from ../SKILL.md.

@@ -15,6 +15,8 @@ metadata:
     - ratzilla
 ---
 
+> **Objective:** Use this skill to prevent TUI layout bugs, input handling failures, and state management issues by enforcing layout discipline, event handling patterns, and MVU architecture below.
+
 # Ratatui
 
 Rust terminal UI framework for building interactive command-line applications.
@@ -93,6 +95,9 @@ fn main() -> io::Result<()> {
 ## Layout System
 
 ### Constraint Types
+### Constraint Types
+
+**Do choose constraints based on layout needs:**
 
 ```rust
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -100,15 +105,13 @@ use ratatui::layout::{Constraint, Direction, Layout};
 let chunks = Layout::default()
     .direction(Direction::Horizontal)
     .constraints([
-        Constraint::Percentage(30),  // 30% of area
-        Constraint::Length(50),      // 50 characters
-        Constraint::Min(10),         // At least 10
-        Constraint::Ratio(1, 4),     // 1/4 of remaining
-    ])
-    .split(area);
-```
-
+        Constraint::Percentage(30),  // 30% of area - responsive scaling
+        Constraint::Length(50),      // 50 characters - fixed width
+        Constraint::Min(10),         // At least 10 - flexible minimum
+        Constraint::Ratio(1, 4),     // 1/4 of remaining - proportional
 ### Flex Modes
+
+**Do use flex modes for alignment control:**
 
 ```rust
 use ratatui::layout::Flex;
@@ -127,6 +130,11 @@ let chunks = Layout::default()
     .split(area);
 
 // SpaceAround - middle spacers twice the size of edges (v0.30+)
+let chunks = Layout::default()
+    .flex(Flex::SpaceAround)
+    .constraints([Constraint::Length(20), Constraint::Length(20)])
+    .split(area);
+```
 let chunks = Layout::default()
     .flex(Flex::SpaceAround)
     .constraints([Constraint::Length(20), Constraint::Length(20)])

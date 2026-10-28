@@ -12,6 +12,8 @@ metadata:
     - tool-development
 ---
 
+> **Objective:** Use this skill to prevent host crashes, unhandled promise rejections, and race conditions in OpenCode plugins by enforcing export discipline, defensive event handling, and session abort safety.
+
 # OpenCode Plugin Development
 
 Complete, field-tested guide for developing plugins for OpenCode (v1.18+) AI coding agent.
@@ -96,6 +98,8 @@ export default MyPlugin
 These rules were discovered through real production crashes. Each one has a regression test in the reference plugin.
 
 ### Rule 1 — Only export Plugin-shaped values from the entry module
+
+**Do only export Plugin-shaped values from the entry module because OpenCode's loader calls every export as a Plugin, and non-Plugin exports crash the host.**
 
 OpenCode's plugin loader iterates **every** module export via `Object.values(module)` and treats each as a Plugin entrypoint:
 

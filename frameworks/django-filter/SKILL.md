@@ -12,6 +12,8 @@ metadata:
     - queryset
 ---
 
+> **Objective:** Use this skill to prevent validation gaps, query injection, and N+1 filter inefficiency in Django filtering by enforcing declarative FilterSet usage, explicit field declaration, and queryset optimization.
+
 # django-filter
 
 Django filtering library for dynamically filtering querysets, with full Django REST Framework integration.
@@ -20,10 +22,10 @@ Django filtering library for dynamically filtering querysets, with full Django R
 
 django-filter provides a declarative way to filter querysets based on URL query parameters.
 
-- **Declarative** - Define filters as Python classes
-- **DRF Integration** - Seamless Django REST Framework support
-- **Flexible** - Custom filter backends and fields
-- **Auto-generation** - FilterSet from Django models
+- **Declarative** - Define filters as Python classes because manual query param parsing leads to validation gaps
+- **DRF Integration** - Seamless Django REST Framework support for auto-generated OpenAPI schemas
+- **Flexible** - Custom filter backends and fields when built-in lookups don't match query patterns
+- **Auto-generation** - FilterSet from Django models to avoid duplicating field definitions
 
 ---
 

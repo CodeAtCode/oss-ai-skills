@@ -1,4 +1,4 @@
-<!-- This file is loaded on demand from ../SKILL.md -->
+> Loaded on demand from SKILL.md when the agent needs metadata.json schema, KCFG configuration, or config.qml patterns.
 
 # Configuration Files Reference
 

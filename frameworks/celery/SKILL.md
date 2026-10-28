@@ -12,6 +12,8 @@ metadata:
     - celery
 ---
 
+> **Objective:** Use this skill to prevent silent task failures, duplicate executions, and worker crashes in distributed task queues by enforcing idempotency, proper routing, and retry semantics.
+
 # Celery
 
 Distributed task processing with focus on routing, composition, and failure handling.
@@ -222,7 +224,7 @@ def fetch_external_data(self, url):
 - `autoretry_for`: Tuple of exception classes that trigger auto-retry
 - `retry_backoff=True`: Delays grow exponentially (default: 1s to 60s)
 - `retry_backoff_max`: Maximum delay between retries
-- `retry_jitter=True`: Add ±25% randomness to each delay
+- `retry_jitter=True`: Add ±25% randomness to each delay — **do enable jitter because synchronized retries create thundering herd**
 - `max_retries`: Total retry attempts (excluding first execution)
 
 ### Manual Retry

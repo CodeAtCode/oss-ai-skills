@@ -1,6 +1,6 @@
-# Settings Customization Deep Dive
+> Loaded on demand from SKILL.md when the agent needs detailed settings reference, sidebar configuration, dark mode colors, and custom admin site setup.
 
-This file is loaded on demand from ../SKILL.md for detailed settings, admin site customization, dark mode, and styling configuration.
+# Settings Customization Deep Dive
 
 ## Settings Reference
 
