@@ -99,9 +99,6 @@ pool = redis.ConnectionPool(
 # Use pool with client
 r = redis.Redis(connection_pool=pool)
 ```
-# Use pool with client
-r = redis.Redis(connection_pool=pool)
-```
 
 ### Connection Pool with Password
 
@@ -254,9 +251,11 @@ r.json().del_('/user:1', Path('$.age'))
 ```python
 r.ts().create('sensor:1')
 r.ts().add('sensor:1', '*', 25.3)
+```
+
 ## Pipelines
 
-**Do use pipelines for batch operations:**
+**Do use pipelines for batch operations**:
 
 ```python
 # Basic pipeline - fast but NOT atomic
@@ -273,13 +272,6 @@ val = pipe.get('mykey')
 pipe.multi()
 pipe.set('mykey', val + 1)
 pipe.execute()  # Raises WatchError if key changed
-```
-pipe = r.pipeline(True)
-pipe.watch('mykey')
-val = pipe.get('mykey')
-pipe.multi()
-pipe.set('mykey', val + 1)
-pipe.execute()
 ```
 
 ## Rules That Prevent Incidents
@@ -536,14 +528,6 @@ Many caching use cases don't need Redis. If your access patterns are simple and 
 
 ### Job Queues Belong to a Dedicated Broker
 
-## When Not to Use Redis
-
-Not every workload benefits from Redis. Know when to choose alternatives.
-
-**Use database instead of Redis when:**
-- Query patterns are straightforward (primary key lookups, indexed searches)
-- Data consistency is critical over speed
-- You already have connection pooling and query caching in place
 
 **Use a dedicated broker when:**
 - Jobs must not be lost

@@ -43,7 +43,7 @@ Access via game: **Red toolbox button → Open custom content folder**
 
 ## Plugin Types
 
-Do **do not mutate game state in local plugins because the server rejects direct mutations in multiplayer**. Use game actions instead.
+Do not mutate game state in local plugins because the server rejects direct mutations in multiplayer. Use game actions instead.
 
 ```javascript
 // Local plugin - info windows only
@@ -219,10 +219,10 @@ registerPlugin({
 
 Load these reference files on demand for detailed API information:
 
-- **Window and Widget UI** - Window creation, widgets (ListView, GroupBox, tabs), events → `references/ui.md`
-- **Hooks and Map Access** - Event subscriptions, park info, map tiles, rides, entities → `references/hooks-map.md`
-- **Network, Storage, Hot Reload, Debugging** - TCP sockets, storage APIs, development workflow → `references/network-storage.md`
-- **Game Actions Reference** - Built-in action types, argument schemas, custom action patterns → `references/game-actions.md`
+- **Window and Widget UI** - Window creation, widgets (ListView, GroupBox, tabs), events → [`references/ui.md`](references/ui.md)
+- **Hooks and Map Access** - Event subscriptions, park info, map tiles, rides, entities → [`references/hooks-map.md`](references/hooks-map.md)
+- **Network, Storage, Hot Reload, Debugging** - TCP sockets, storage APIs, development workflow → [`references/network-storage.md`](references/network-storage.md)
+- **Game Actions Reference** - Built-in action types, argument schemas, custom action patterns → [`references/game-actions.md`](references/game-actions.md)
 
 ## References
 

@@ -4,7 +4,14 @@ description: Use when building high-performance APIs with django-bolt - routing,
 metadata:
   author: MT
   version: 3.0.0
-  tags: python, django, bolt, api, rust, performance, async
+  tags:
+    - python
+    - django
+    - bolt
+    - api
+    - rust
+    - performance
+    - async
 ---
 
 > **Objective:** Use this skill to prevent async ORM blocking, WebSocket resource leaks, and performance regressions in Django Bolt APIs by enforcing async query patterns, connection lifecycle management, and msgspec serializer discipline.

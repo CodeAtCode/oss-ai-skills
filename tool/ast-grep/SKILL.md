@@ -422,8 +422,7 @@ ast-grep -p 'console.log($$$ARGS)' src/
 # Show context around matches
 ast-grep -p 'TODO' --context 3 src/
 ```
-```bash
-# Search and rewrite
+
 ### Rewrite Operations
 
 **Do use interactive mode for important changes:**
@@ -438,6 +437,12 @@ ast-grep -p '$PROP && $PROP()' -r '$PROP?.()' --interactive src/
 # Apply all without confirmation - use with caution
 ast-grep -p 'var $X' -r 'let $X' --update-all src/
 ```
+
+### Rule Scanning
+
+**Scan with configured rules:**
+
+```bash
 ast-grep scan --config sgconfig.yml src/
 
 # Inline rule

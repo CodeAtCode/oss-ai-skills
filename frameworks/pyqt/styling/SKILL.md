@@ -206,6 +206,16 @@ class RoundedButton(QPushButton):
 
 Assumes familiarity with CSS selectors and specificity. Focuses on Qt-specific syntax.
 
+### Property Support
+
+QSS supports a subset of CSS properties. Check the [official reference](https://doc.qt.io/qtforpython-6/overviews/stylesheet-reference.html) before using unfamiliar properties.
+
+### Selector Specificity
+
+QSS uses similar specificity rules to CSS:
+- Inline `setStyleSheet()` calls have highest priority
+- ID selectors (`#objectName`) beat class-like selectors (`[property="value"]`)
+- Element selectors (`QPushButton`) have lowest priority
 ## Applying Styles
 
 ### Application-Wide
@@ -428,6 +438,3 @@ QScrollBar::sub-line:vertical {
 - **Qt Style Sheets**: https://doc.qt.io/qtforpython-6/overviews/stylesheet.html (reference for QSS syntax and supported properties)
 - **QSS Reference**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-reference.html (lookup property support before using)
 - **Qt Examples**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-examples.html (see working QSS patterns)
-- **Qt Style Sheets**: https://doc.qt.io/qtforpython-6/overviews/stylesheet.html
-- **QSS Reference**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-reference.html
-- **Qt Examples**: https://doc.qt.io/qtforpython-6/overviews/stylesheet-examples.html

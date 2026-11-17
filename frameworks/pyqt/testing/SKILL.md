@@ -28,7 +28,7 @@ pip install pytest-qt
 
 ## qtbot Fixture
 
-The `qtbot` fixture provides methods for interacting with Qt widgets:
+The `qtbot` fixture provides methods for interacting with Qt widgets. Register widgets with `addWidget()` because unregistered widgets may not be cleaned up properly, causing test isolation failures.
 
 ```python
 import pytest
@@ -68,6 +68,8 @@ def test_key_press(qtbot):
 ```
 
 ## Mouse and Keyboard Simulation
+
+Simulate user input because testing requires verifying UI responds correctly to actual user interactions.
 
 ```python
 from PySide6.QtCore import Qt
@@ -122,7 +124,7 @@ def test_checkbox_toggle(qtbot):
 
 ## waitSignal
 
-Wait for signals to be emitted:
+Wait for signals to be emitted because async UI operations need explicit synchronization points—without waiting, tests may assert before the UI state updates, causing flaky failures.
 
 ```python
 from PySide6.QtCore import QThread, Signal, QTimer
@@ -176,6 +178,8 @@ def test_wait_signals_any(qtbot):
 
 ## waitActive and waitExposed
 
+Wait for window activation and exposure because visibility states are asynchronous—asserting before a widget is exposed causes tests to pass when the UI is actually broken.
+
 ```python
 def test_window_activation(qtbot, qapp):
     """Test window becomes active."""
@@ -203,6 +207,8 @@ def test_window_exposed(qtbot):
 ```
 
 ## Testing Dialogs
+
+Test dialogs with timed interaction because dialogs block execution—without `QTimer.singleShot`, the test would hang waiting for user input that never comes.
 
 ```python
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
@@ -282,6 +288,8 @@ def test_custom_dialog_values(qtbot):
 
 ## Testing Model/View
 
+Test model signals because QAbstractItemModel changes must emit signals for views to update—missing signals cause UI staleness that tests won't catch without explicit signal waiting.
+
 ```python
 from PySide6.QtCore import QAbstractListModel, Qt, QModelIndex
 
@@ -338,6 +346,8 @@ def test_model_updates(qtbot):
 ```
 
 ## Testing Threaded Code
+
+Test worker threads with signal waiting because thread completion is asynchronous—without `waitSignal(finished)`, tests may assert before background work completes, causing race conditions.
 
 ```python
 from PySide6.QtCore import QThread, Signal
@@ -396,6 +406,8 @@ def test_thread_cancellation(qtbot):
 
 ## Fixtures
 
+Use fixtures for shared setup because pytest fixtures provide proper lifecycle management and dependency injection—inline setup in every test causes duplication and makes teardown error-prone.
+
 ```python
 # conftest.py - Shared fixtures
 import pytest
@@ -440,7 +452,7 @@ def temp_settings(tmp_path):
 
 ## Manual Testing
 
-Debugging techniques for interactive testing and troubleshooting:
+Use debug techniques for interactive troubleshooting because Qt's event loop makes traditional print debugging insufficient—dumping widget trees and checking parent/child relationships reveals orphaned widgets and memory leaks.
 
 ```python
 # Add debug output

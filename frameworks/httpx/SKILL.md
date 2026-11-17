@@ -319,51 +319,7 @@ async def test_async_client():
     await inner()
 ```
 
-## Common Pitfalls
 
-### Connection Leaks
-
-```python
-# Wrong: Client not closed
-client = httpx.Client()
-response = client.get("https://example.com")
-# Connection pool never cleaned up
-
-# Correct: Context manager or explicit close
-with httpx.Client() as client:
-    response = client.get("https://example.com")
-
-# Or for long-lived clients
-client = httpx.Client()
-try:
-    response = client.get("https://example.com")
-finally:
-    client.close()
-```
-
-### Mixing Sync and Async
-
-```python
-# Wrong: Sync client in async function blocks event loop
-async def fetch():
-    with httpx.Client() as client:  # Blocks!
-        return client.get("https://example.com")
-
-# Correct: Use AsyncClient
-async def fetch():
-    async with httpx.AsyncClient() as client:
-        return await client.get("https://example.com")
-```
-
-### Timeout Not Set
-
-```python
-# Wrong: No timeout—server can hang forever
-httpx.get("https://slow-server.com")
-
-# Correct: Explicit timeout
-httpx.get("https://slow-server.com", timeout=httpx.Timeout(connect=5.0, read=30.0))
-```
 
 ## Deep Dives
 

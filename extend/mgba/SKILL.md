@@ -13,16 +13,13 @@ metadata:
     - memory-hacking
 ---
 
+> **Objective:** Use this skill to reduce [desynced-TAS runs, memory-read misalignment bugs, frame-callback race incidents, save-state-corruption losses] by enforcing [frame-accurate discipline, address-validation rules, callback-ordering patterns below].
+
 # mGBA Scripting
 
 Lua scripting for mGBA emulator.
 
-> **Objective:** Use this skill to reduce [desynced-TAS runs, memory-read misalignment bugs, frame-callback race incidents, save-state-corruption losses] by enforcing [frame-accurate discipline, address-validation rules, callback-ordering patterns below].
-
-## Overview
-
-Starting with version 0.10, mGBA has built-in scripting capabilities. To use scripting, click "Scripting..." from the Tools menu. Currently, only Lua scripting is supported.
-
+mGBA has built-in Lua scripting capabilities (Tools → Scripting menu).
 **Key Features:**
 - Full memory access (ROM, RAM, MMIO)
 - Input manipulation (button presses)

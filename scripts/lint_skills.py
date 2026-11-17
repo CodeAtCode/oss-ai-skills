@@ -2,7 +2,8 @@
 """Lint skills in oss-ai-skills repository.
 
 Read-only scanner checking SKILL.md frontmatter, line counts, reference markers,
-link resolution, and README sync.
+link resolution, README sync, and fence-aware Markdown structure (one H1, balanced
+code fences, no adjacent duplicate headings).
 """
 
 import os
@@ -205,6 +206,56 @@ def check_links(skill_md: str, skill_path: str, repo_root: str) -> list[Violatio
     return violations
 
 
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+HEADING_RE = re.compile(r"^(#{1,6}) ")
+
+
+def check_structure(skill_md: str, content: str) -> list[Violation]:
+    """Fence-aware checks the other checks miss: exactly one H1, balanced code
+    fences, and no adjacent duplicate headings (the bad-merge signature)."""
+    violations = []
+    in_fence = False
+    fence_char = None
+    fence_count = 0
+    h1_lines = []
+    headings = []  # (line_no, text) outside fences
+
+    for line_num, raw in enumerate(content.split("\n"), 1):
+        line = raw.rstrip()
+        fence = FENCE_RE.match(line)
+        if fence:
+            char = fence.group(1)[0]
+            if not in_fence:
+                in_fence, fence_char = True, char
+            elif char == fence_char:
+                in_fence, fence_char = False, None
+            fence_count += 1
+            continue
+        if in_fence:
+            continue
+        heading = HEADING_RE.match(line)
+        if heading:
+            headings.append((line_num, line))
+            if heading.group(1) == "#":
+                h1_lines.append(line_num)
+
+    if len(h1_lines) != 1:
+        violations.append(Violation(
+            skill_md,
+            h1_lines[0] if h1_lines else 1,
+            f"expected exactly one H1 heading, found {len(h1_lines)}"
+            + (f" at lines {h1_lines}" if h1_lines else ""),
+        ))
+    if fence_count % 2 == 1 or in_fence:
+        violations.append(Violation(skill_md, fence_count,
+            "unbalanced code fence: a ``` block is left open"))
+    for prev, cur in zip(headings, headings[1:]):
+        if cur[1] == prev[1] and cur[0] - prev[0] <= 2:
+            violations.append(Violation(skill_md, cur[0],
+                f"adjacent duplicate heading: {cur[1].strip()}"))
+    return violations
+
+
 def check_mutation_decisions(skill_path: str) -> list[Violation]:
     """When mutation-decisions.md exists, every kept-survivor line needs a
     reason (equivalent|untestable|cost) and a YYYY-MM-DD date, so decisions
@@ -318,6 +369,7 @@ def scan(repo_root: str) -> tuple[list[Violation], int]:
         violations.extend(check_line_count(skill_md))
         violations.extend(check_references(skill_path))
         violations.extend(check_links(skill_md, skill_path, repo_root))
+        violations.extend(check_structure(skill_md, content))
         violations.extend(check_mutation_decisions(skill_path))
 
     violations.extend(check_readme_sync(repo_root, skill_rels))

@@ -60,7 +60,7 @@ pip install git+https://github.com/AlexanderCollins/TurboDRF.git
 - drf-yasg >=1.21.0, django-filter >=23.0
 - Optional extras: `turbodrf[fast]` (msgspec/orjson ~7x faster), `turbodrf[allauth]` (django-allauth >=0.57.0)
 
-Verified against TurboDRF v0.5.1 (2026-07-12).
+Verified against TurboDRF v0.5.1.
 
 ## Quick Start
 
@@ -246,7 +246,7 @@ FK fields are flattened (`author__name` → `author_name`). M2M fields are array
 ```json
 {
     "title": "Django for APIs",
-    "author_name": "William Vincent",
+    "author_name": "Jane Doe",
     "tags": [{"name": "Python"}, {"name": "Django"}]
 }
 ```
@@ -410,17 +410,6 @@ def validate_title(value):
 
 Restrict access appropriately:
 
-```python
-TURBODRF_ROLES = {
-    'public': ['myapp.book.read'],
-    'staff': [
-        'myapp.book.read',
-        'myapp.book.create',
-        'myapp.book.update',
-        'myapp.book.delete',
-    ],
-}
-```
 
 ### 4. Filter Usage
 

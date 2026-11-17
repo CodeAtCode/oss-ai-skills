@@ -11,9 +11,9 @@ metadata:
     - gameboy-advance
 ---
 
-# BPCore Engine Skill
-
 > **Objective:** Use this skill to reduce SRAM-corruption incidents, sprite-flicker bugs, link-cable desync, and tilemap-tearing crashes by enforcing save-format discipline, VRAM-budget rules, and sync-protocol patterns below.
+
+# BPCore Engine Skill
 
 Comprehensive guide for building Gameboy Advance games using the BPCore Engine Lua framework.
 
@@ -102,32 +102,9 @@ your-project/
 └── data.txt                   # Resources
 ```
 
-### Build Layout
+### Building Your ROM
 
-```
-./
-├── src/
-│   ├── main.lua              # Main loop
-│   ├── game.lua              # Game logic
-│   ├── menu.lua              # Menu
-│   └── level1.csv            # Tilemap
-├── assets/
-│   ├── graphics/
-│   │   ├── spritesheet.bmp
-│   │   ├── tiles0.bmp
-│   │   └── tiles1.bmp
-│   ├── audio/
-│   │   ├── music.raw
-│   │   ├── jump.wav
-│   │   └── coin.wav
-│   └── tilemaps/
-│       └── world.csv
-├── build.lua                 # Build script
-├── BPCoreEngine.gba          # Engine ROM
-└── dist/
-    └── yourgame.gba          # Output
-```
-
+**Step 1**: Create `manifest.lua`
 ### Building Your ROM
 
 **Step 1**: Create `manifest.lua`
@@ -192,15 +169,3 @@ ffmpeg -i input.mp3 -ar 16000 -ac 1 -f s8 output.raw
 - [GBA Programming Wiki](https://gbadev.net/)
 - [mGBA Emulator](https://mgba.io/)
 
----
-
-## Summary
-
-This skill covers BPCore Engine development for GBA:
-
-- **Critical Rules**: Memory/VRAM, SRAM, Multiplayer, Camera discipline with failure modes
-- **Installation & Project Structure**: BPCoreEngine.gba sources, build process
-- **Deep Dives**: API reference, save/load, multiplayer, optimization, error handling
-- **Troubleshooting**: Emulator differences, sprite flickering, audio conflicts, save corruption, desync
-
-Refer to [official repository](https://github.com/evanbowman/BPCore-Engine) for updates.

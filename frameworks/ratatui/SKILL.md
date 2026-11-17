@@ -10,9 +10,6 @@ metadata:
     - terminal
     - cli
     - ratatui
-    - tachyonfx
-    - mousefood
-    - ratzilla
 ---
 
 > **Objective:** Use this skill to prevent TUI layout bugs, input handling failures, and state management issues by enforcing layout discipline, event handling patterns, and MVU architecture below.
@@ -95,7 +92,6 @@ fn main() -> io::Result<()> {
 ## Layout System
 
 ### Constraint Types
-### Constraint Types
 
 **Do choose constraints based on layout needs:**
 
@@ -109,6 +105,10 @@ let chunks = Layout::default()
         Constraint::Length(50),      // 50 characters - fixed width
         Constraint::Min(10),         // At least 10 - flexible minimum
         Constraint::Ratio(1, 4),     // 1/4 of remaining - proportional
+    ])
+    .split(area);
+```
+
 ### Flex Modes
 
 **Do use flex modes for alignment control:**
@@ -130,11 +130,6 @@ let chunks = Layout::default()
     .split(area);
 
 // SpaceAround - middle spacers twice the size of edges (v0.30+)
-let chunks = Layout::default()
-    .flex(Flex::SpaceAround)
-    .constraints([Constraint::Length(20), Constraint::Length(20)])
-    .split(area);
-```
 let chunks = Layout::default()
     .flex(Flex::SpaceAround)
     .constraints([Constraint::Length(20), Constraint::Length(20)])

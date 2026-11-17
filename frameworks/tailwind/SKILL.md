@@ -14,6 +14,8 @@ metadata:
 ---
 
 > **Objective:** Use this skill to prevent design token drift, bundle size bloat, and dark mode failures by enforcing @theme discipline, semantic token usage, and content detection patterns below.
+# Tailwind CSS
+
 ## Overview
 
 Tailwind CSS v4 is a complete rewrite built on the Rust-based Oxide engine. Configuration moves from JavaScript to CSS via `@theme`.
@@ -79,8 +81,6 @@ That's it. No `@tailwind base/components/utilities` directives—they're gone.
 
 ### Token Definition Pattern
 
-### Token Definition Pattern
-
 **Do define tokens like this:**
 
 ```css
@@ -103,10 +103,6 @@ That's it. No `@tailwind base/components/utilities` directives—they're gone.
   --spacing-xl: 2rem;
 
   /* Typography */
-  --font-display: "Clash Display", sans-serif;
-  --font-body: "Satoshi", system-ui, sans-serif;
-}
-```
   --font-display: "Clash Display", sans-serif;
   --font-body: "Satoshi", system-ui, sans-serif;
 }

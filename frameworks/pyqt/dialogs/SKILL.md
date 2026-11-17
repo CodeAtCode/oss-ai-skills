@@ -13,11 +13,9 @@ metadata:
     - ui
 ---
 
-# PyQt Dialogs
-
-Standard and custom dialog patterns for PyQt/PySide6 applications.
-
 > **Objective:** Use this skill to reduce modal-deadlock incidents, rejected-input data loss, dialog-sizing regressions, native-vs-custom dialog mismatches by enforcing modal discipline (exec() vs open()), validation-at-boundary rules, and QDialogButtonBox usage patterns.
+
+# PyQt Dialogs
 
 ## Modal vs Modeless Discipline
 
@@ -113,6 +111,8 @@ if dialog.exec() == QDialog.Accepted:
 **Do validate in `try_accept()` before calling `accept()` because** accepted dialogs with invalid data propagate errors downstream and force callers to handle bad state.
 
 ```python
+import re
+
 class ValidatedDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -150,11 +150,13 @@ class ValidatedDialog(QDialog):
     
     def validate(self):
         email = self.email_edit.text()
-        if not email:
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             self.error_label.setText("Email is required")
             return False
         
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            self.error_label.setText("Invalid email format")
+            return False
             self.error_label.setText("Invalid email format")
             return False
         
@@ -216,32 +218,6 @@ search_dialog.show()  # Non-modal — dialog stays open
 5. **Validate before accept() because** downstream code assumes dialog data is valid after QDialog.Accepted.
 
 6. **Use exec() for modal, show() for modeless because** mixing them causes race conditions (exec() blocks, show() doesn't).
-
-## Qt 6 Modern Patterns
-
-### QDialog Setup Pattern
-
-```python
-class MyDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Settings")
-        self.setModal(True)
-        
-        layout = QVBoxLayout()
-        # ... widgets ...
-        
-        # Use setLayout() instead of layout = ...; self.setLayout(layout)
-        self.setLayout(layout)
-        
-        # Standard button box
-        btn_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
-        btn_box.accepted.connect(self.accept)
-        btn_box.rejected.connect(self.reject)
-        layout.addWidget(btn_box)
-```
 
 ## Deep Dives
 

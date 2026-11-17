@@ -155,7 +155,10 @@ messenger.folders.get(folderId)
 messenger.folders.getSubFolders(account)
 messenger.folders.create(accountId, name)
 
-// Compose — open, modify, send拦截
+// Compose — open, modify, send
+messenger.compose.beginNew({ to, subject, body })
+messenger.compose.getComposeDetails(tabId)
+messenger.compose.onBeforeSend.addListener(handler)
 messenger.compose.beginNew({ to, subject, body })
 messenger.compose.getComposeDetails(tabId)
 messenger.compose.onBeforeSend.addListener(handler)

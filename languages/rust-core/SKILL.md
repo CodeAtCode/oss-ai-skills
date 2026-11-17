@@ -5,8 +5,6 @@ description: >
   borrowing, error handling, async patterns, API design, memory optimization,
   performance, testing, and common anti-patterns. Targets Rust 1.80+ and
   Edition 2024. Invoke with /rust-core.
-globs: ["**/*.rs"]
-license: MIT
 metadata:
   author: mte90
   version: "2.0.0"
@@ -18,11 +16,6 @@ metadata:
     - async
     - performance
     - testing
-  sources:
-    - Rust API Guidelines
-    - Rust Performance Book
-    - Rust Design Patterns
-    - ripgrep, tokio, serde, polars codebases
 ---
 
 > **Objective:** Use this skill to reduce borrow-checker rejections, unwrap panics in production, and data-race incidents by enforcing ownership discipline, error-handling patterns, and concurrency rules below.
@@ -30,6 +23,10 @@ metadata:
 # Rust Core
 
 Guide for writing high-quality, idiomatic, and optimized Rust code. Targets Rust 1.80+ and Edition 2024.
+
+**File globs:** `**/*.rs`  
+**License:** MIT  
+**Sources:** Rust API Guidelines, Rust Performance Book, Rust Design Patterns, ripgrep/tokio/serde/polars codebases
 
 See `references/when-to-apply.md` for usage context.
 
@@ -221,13 +218,13 @@ See `rules/testing.md` for detailed rules with failure modes and examples.
 
 The 15 `anti-*` rules are indexed in `references/rule-index.md` with full rationale and ❌/✅ examples in [`rules/anti-patterns.md`](rules/anti-patterns.md).
 
-Common anti-patterns to avoid:
+Common anti-patterns (see detailed rules at the cited line numbers):
 
-- **Don't use `.unwrap()` in production code** because panics crash instead of recovering
-- **Don't clone when borrowing works** because cloning wastes memory and CPU
-- **Don't hold locks across `.await`** because this causes deadlocks
-- **Don't accept `&String` when `&str` works** because this restricts caller flexibility
-- **Don't use `format!()` in hot paths** because allocation in hot paths degrades performance
+- **Don't use `.unwrap()` in production code** → see Error Handling rule at :100
+- **Don't clone when borrowing works** → see Ownership rule at :74
+- **Don't hold locks across `.await`** → see Async rule at :174
+- **Don't accept `&String` when `&str` works** → see Ownership rule at :76
+- **Don't use `format!()` in hot paths** → see Memory rule at :132
 
 ## Deep Dives
 

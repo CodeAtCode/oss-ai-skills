@@ -149,21 +149,6 @@ else:
 
 **Failure mode:** Silent data loss when file missing and code proceeds with empty data.
 
-## Signal/Slot Reference
-
-See `references/signals-slots.md` for complete signal declaration, slot declaration, and connection syntax.
-
-## QTimer Reference
-
-See `references/timers.md` for complete timer API including single-shot, periodic, and timer properties.
-
-## QSettings Reference
-
-See `references/settings.md` for complete settings API including groups, arrays, and format options.
-
-## File I/O Reference
-
-See `references/file-io.md` for complete file operations including QFile, QTextStream, and QDir.
 
 ## Deep Dives
 

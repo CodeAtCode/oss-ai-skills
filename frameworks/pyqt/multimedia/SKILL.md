@@ -17,7 +17,7 @@ metadata:
 
 > **Objective:** Use this skill to reduce playback-deadlock incidents, GStreamer-backend startup failures, codec-missing black-screen bugs, and recording-corruption incidents by enforcing backend-setup discipline, codec-availability checks, and platform-compatibility decision patterns below.
 
----
+# PyQt Multimedia
 
 ## Core Rules (do X because Y)
 

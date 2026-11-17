@@ -23,12 +23,13 @@ Complete reference for Python testing with pytest.
 pytest is a mature, full-featured Python testing framework that makes it easy to write simple and scalable tests.
 
 **Key Features:**
-- Simple: Write tests with plain assert statements
-- Powerful: Fixtures for setup/teardown
-- Parametrized: Run same test with different inputs
-- Plugins: Rich ecosystem of plugins
-- Parallel: Run tests in parallel with pytest-xdist
-- Detailed: Informative failure messages
+
+- **Simple assertions** - Use plain `assert` statements instead of unittest-style assertions; pytest introspects expressions for detailed failure messages
+- **Fixtures** - Use `@pytest.fixture` for setup/teardown when tests need shared resources (database, temp files, mock objects)
+- **Parametrization** - Use `@pytest.mark.parametrize` when the same test logic applies to multiple input cases
+- **Plugins** - Load plugins like pytest-cov, pytest-mock, pytest-asyncio when you need coverage, mocking, or async support
+- **Parallel execution** - Use pytest-xdist (`-n auto`) when test suite runtime exceeds acceptable CI thresholds
+- **Informative failure messages** - Rely on pytest's default traceback compression; use `--tb=long` only when debugging complex failures
 
 ### Installation
 
@@ -584,14 +585,10 @@ def test_user_and_password():
 
 Split into separate tests when behaviors differ. The real driver is setup cost: duplicating expensive setup across near-identical tests is worse than a second assertion on the same behavior — share setup with fixtures instead of merging unrelated behaviors into one test.
 
-## Mutation Testing
+See `references/mutation-testing.md` for mutmut workflow, cargo-mutants, Stryker, and mutation testing best practices.
 
 ## References
 
 - **Official Documentation**: https://docs.pytest.org/ (primary reference for all pytest features)
 - **GitHub Repository**: https://github.com/pytest-dev/pytest (report bugs, view source)
 - **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html (discover ecosystem plugins before writing custom solutions)
-- **Book**: "Python Testing with pytest" by Brian Okken (deep dive on advanced patterns)
-- **GitHub Repository**: https://github.com/pytest-dev/pytest
-- **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html
-- **Book**: "Python Testing with pytest" by Brian Okken

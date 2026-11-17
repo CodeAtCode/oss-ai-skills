@@ -18,402 +18,163 @@ metadata:
 
 # PyQt Widgets - QtWidgets Module
 
-## Display Widgets
+## Widget Selection Guide
 
-### QLabel
+### Display Widgets
 
-```python
-from PySide6.QtWidgets import QLabel
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+**QLabel** - Use for showing text or images. Choose when:
+- Displaying static text with optional rich text formatting
+- Showing images with scaling control
+- Creating clickable links (use `setOpenExternalLinks(True)`)
 
-label = QLabel("Text Label")
+**Pitfall**: Don't use QLabel for editable content - use QLineEdit or QTextEdit instead.
 
-# Text properties
-label.setText("New text")
-label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-label.setWordWrap(True)
-label.setIndent(10)  # Pixels
+See [widgets-api.md](references/widgets-api.md) for complete QLabel API.
 
-# Image
-label.setPixmap(QPixmap("image.png"))
-label.setScaledContents(True)
+**QProgressBar** - Use for visual progress indication. Choose when:
+- Showing operation completion percentage (set range 0-100)
+- Indeterminate mode for unknown duration (`setRange(0, 0)`)
 
-# Rich text
-label.setText("<b>Bold</b> and <i>italic</i>")
-label.setTextFormat(Qt.TextFormat.RichText)
+**Pitfall**: Don't forget to update the value asynchronously for long operations.
 
-# Link
-label.setText('<a href="https://example.com">Click here</a>')
-label.setOpenExternalLinks(True)
-label.linkActivated.connect(lambda url: print(f"Clicked: {url}"))
-```
+See [widgets-api.md](references/widgets-api.md) for complete QProgressBar API.
 
-### QProgressBar
+**QLCDNumber** - Use for numeric display with digital appearance. Choose when:
+- Showing numeric values with visual emphasis
+- Need hex/octal/binary display modes
 
-```python
-from PySide6.QtWidgets import QProgressBar
+**Pitfall**: Limited use cases - most numeric displays are better with QLabel.
 
-progress = QProgressBar()
+See [widgets-api.md](references/widgets-api.md) for complete QLCDNumber API.
 
-# Set range and value
-progress.setRange(0, 100)
-progress.setValue(50)
+### Input Widgets
 
-# Text visibility
-progress.setTextVisible(True)
-progress.setFormat("%p%")  # %p = percentage, %v = value
+**QLineEdit** - Use for single-line text input. Choose when:
+- Collecting short text (names, search queries)
+- Password input (`setEchoMode(Password)`)
+- Validated input with `QValidator` subclasses
 
-# Indeterminate mode
-progress.setRange(0, 0)  # Shows busy indicator
+**Pitfall**: Don't use for multi-line text - use QTextEdit instead.
 
-# Orientation
-progress.setOrientation(Qt.Orientation.Horizontal)
-progress.setOrientation(Qt.Orientation.Vertical)
-```
+See [widgets-api.md](references/widgets-api.md) for complete QLineEdit API.
 
-### QLCDNumber
+**QTextEdit** - Use for multi-line rich text editing. Choose when:
+- Editing paragraphs or formatted content
+- Need undo/redo support
+- Displaying HTML content
 
-```python
-from PySide6.QtWidgets import QLCDNumber
+**Pitfall**: Plain text operations use `toPlainText()`/`setPlainText()`, HTML uses `toHtml()`/`setHtml()` - don't mix.
 
-lcd = QLCDNumber()
-lcd.display(123)
-lcd.setDigitCount(4)
-lcd.setMode(QLCDNumber.Mode.Dec)  # Hex, Oct, Bin
-lcd.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
-```
+See [widgets-api.md](references/widgets-api.md) for complete QTextEdit API.
 
-## Input Widgets
+**QSpinBox/QDoubleSpinBox** - Use for numeric input with constraints. Choose when:
+- Integer values (QSpinBox) or decimals (QDoubleSpinBox)
+- Need bounded range with step increments
+- User should not type invalid values
 
-### QLineEdit
+**Pitfall**: Don't forget to set reasonable min/max values to prevent overflow.
 
-```python
-from PySide6.QtWidgets import QLineEdit
+See [widgets-api.md](references/widgets-api.md) for complete spin box API.
 
-line = QLineEdit()
+**QComboBox** - Use for dropdown selection. Choose when:
+- Limited set of mutually exclusive options
+- Space is constrained (collapses when not in use)
+- Need editable mode for "type or select"
 
-# Text
-line.setText("Default")
-line.setPlaceholderText("Enter text...")
-line.clear()
+**Pitfall**: Use `currentIndexChanged` for index changes, `currentTextChanged` for text changes - they fire separately.
 
-# Echo mode
-line.setEchoMode(QLineEdit.EchoMode.Normal)
-line.setEchoMode(QLineEdit.EchoMode.Password)
-line.setEchoMode(QLineEdit.EchoMode.NoEcho)
+See [widgets-api.md](references/widgets-api.md) for complete QComboBox API.
 
-# Validation
-line.setMaxLength(100)
-line.setInputMask("999-9999")  # Phone number
-line.setValidator(QIntValidator(0, 100))  # Numbers only
+**QCheckBox** - Use for boolean or tristate options. Choose when:
+- Single on/off setting
+- Need tristate (checked/unchecked/partiallyChecked)
+- Group of independent options (not exclusive)
 
-# Selection
-line.selectAll()
-line.setSelection(0, 5)
+**Pitfall**: `stateChanged` fires for all three states in tristate mode; `toggled` only for checked/unchecked.
 
-# Signals
-line.textChanged.connect(self.onTextChange)
-line.textEdited.connect(self.onTextEdit)
-line.returnPressed.connect(self.onSubmit)
-line.editingFinished.connect(self.onEditDone)
-```
+See [widgets-api.md](references/widgets-api.md) for complete QCheckBox API.
 
-### QTextEdit
+**QRadioButton** - Use for mutually exclusive selection. Choose when:
+- User must pick exactly one option from a set
+- Options are visible simultaneously (unlike QComboBox)
 
-```python
-from PySide6.QtWidgets import QTextEdit
+**Pitfall**: Group radio buttons with QButtonGroup or same parent for exclusivity.
 
-text = QTextEdit()
+See [widgets-api.md](references/widgets-api.md) for complete QRadioButton API.
 
-# Plain text
-text.setPlainText("Plain text content")
-plain = text.toPlainText()
+**QSlider** - Use for continuous or stepped value selection. Choose when:
+- Visual representation of range matters (volume, brightness)
+- User should see current position at a glance
+- Need coarse + fine control (page step + single step)
 
-# HTML
-text.setHtml("<b>Bold</b> and <i>italic</i>")
-html = text.toHtml()
+**Pitfall**: Don't use for precise input - pair with QSpinBox for exact value display.
 
-# Append
-text.append("More text")
-text.append("<b>HTML text</b>")
+See [widgets-api.md](references/widgets-api.md) for complete QSlider API.
 
-# Properties
-text.setReadOnly(True)
-text.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+### Buttons
 
-# Cursor
-cursor = text.textCursor()
-cursor.insertText("Inserted text")
+**QPushButton** - Use for command execution. Choose when:
+- Triggering an action (submit, cancel, save)
+- Need icon + text combination
+- Want context menu (`setMenu()`)
 
-# Undo/Redo
-text.undo()
-text.redo()
-text.setUndoRedoEnabled(False)
-```
+**Pitfall**: Use `clicked` for action, `pressed`/`released` for visual feedback control.
 
-### QSpinBox and QDoubleSpinBox
+See [widgets-api.md](references/widgets-api.md) for complete QPushButton API.
 
-```python
-from PySide6.QtWidgets import QSpinBox, QDoubleSpinBox
+**QToolButton** - Use for toolbar or compact icon buttons. Choose when:
+- Space-efficient icon buttons needed
+- Toolbar or palette layout
+- Auto-raise for hover effect
 
-spin = QSpinBox()
-spin.setRange(0, 100)
-spin.setValue(50)
-spin.setSingleStep(5)  # Step on arrow click
-spin.setSuffix(" px")
-spin.setPrefix("$ ")
-spin.valueChanged.connect(lambda v: print(f"Value: {v}"))
+**Pitfall**: Not ideal for main action buttons - use QPushButton for primary actions.
 
-# Double spin box
-dspin = QDoubleSpinBox()
-dspin.setRange(0.0, 1.0)
-dspin.setValue(0.5)
-dspin.setDecimals(2)
-dspin.setSingleStep(0.1)
-```
+See [widgets-api.md](references/widgets-api.md) for complete QToolButton API.
 
-### QComboBox
+### Container Widgets
 
-```python
-from PySide6.QtWidgets import QComboBox
+**QGroupBox** - Use for visual grouping of related controls. Choose when:
+- Settings or options need visual separation
+- Group should be toggleable (`setCheckable(True)`)
 
-combo = QComboBox()
+**Pitfall**: Remember to add a layout to the group box, not just widgets.
 
-# Add items
-combo.addItem("Option 1")
-combo.addItems(["Option 2", "Option 3", "Option 4"])
+See [widgets-api.md](references/widgets-api.md) for complete QGroupBox API.
 
-# Current selection
-combo.setCurrentIndex(0)
-combo.setCurrentText("Option 2")
-index = combo.currentIndex()
-text = combo.currentText()
+**QTabWidget** - Use for tabbed interfaces. Choose when:
+- Multiple panels of content need switching
+- Want to save vertical space
+- Each tab represents a distinct mode/view
 
-# Editable
-combo.setEditable(True)
-combo.setCompleter(None)  # Disable autocomplete
+**Pitfall**: Use `currentChanged` to react to tab switches; don't store state in tab widgets directly.
 
-# Insert
-combo.insertItem(0, "First")
-combo.insertItems(1, ["A", "B"])
+See [widgets-api.md](references/widgets-api.md) for complete QTabWidget API.
 
-# Remove
-combo.removeItem(0)
-combo.clear()
+**QScrollArea** - Use for scrolling content. Choose when:
+- Content exceeds visible area
+- Need to scroll a widget (not raw content)
 
-# Signals
-combo.currentIndexChanged.connect(lambda i: print(f"Index: {i}"))
-combo.currentTextChanged.connect(lambda t: print(f"Text: {t}"))
-```
+**Pitfall**: Always set `setWidgetResizable(True)` unless you need precise scroll control.
 
-### QCheckBox
+See [widgets-api.md](references/widgets-api.md) for complete QScrollArea API.
 
-```python
-from PySide6.QtWidgets import QCheckBox
+**QSplitter** - Use for resizable panes. Choose when:
+- User should control panel sizes (editor + preview)
+- Need horizontal or vertical split
+- Want to remember sizes (save `getSizes()` on exit)
 
-check = QCheckBox("Enable feature")
-check.setChecked(True)
+**Pitfall**: Set `setChildrenCollapsible(False)` if a pane must have minimum content.
 
-# Tristate
-check.setTristate(True)
-check.setCheckState(Qt.CheckState.PartiallyChecked)
+See [widgets-api.md](references/widgets-api.md) for complete QSplitter API.
 
-# State
-is_checked = check.isChecked()
-state = check.checkState()
+**QStackedWidget** - Use for page-based navigation. Choose when:
+- Multiple views, one visible at a time
+- Wizard-style step progression
+- Tab content that doesn't need tab bar (control via code)
 
-# Signals
-check.stateChanged.connect(lambda s: print(f"State: {s}"))
-check.toggled.connect(lambda c: print(f"Checked: {c}"))
-```
+**Pitfall**: Use `setCurrentIndex()` or `setCurrentWidget()` - don't rely on user navigation.
 
-### QRadioButton
-
-```python
-from PySide6.QtWidgets import QRadioButton, QButtonGroup
-
-radio1 = QRadioButton("Option A")
-radio2 = QRadioButton("Option B")
-
-# Group (exclusive)
-group = QButtonGroup()
-group.addButton(radio1)
-group.addButton(radio2)
-
-# Or use parent widget for auto-exclusive behavior
-
-# Select
-radio1.setChecked(True)
-
-# Check
-if radio1.isChecked():
-    print("Option A selected")
-
-# Signals
-radio1.toggled.connect(lambda c: print(f"Toggled: {c}"))
-group.buttonClicked.connect(lambda btn: print(f"Clicked: {btn.text()}"))
-```
-
-### QSlider
-
-```python
-from PySide6.QtWidgets import QSlider
-
-slider = QSlider(Qt.Orientation.Horizontal)
-slider.setRange(0, 100)
-slider.setValue(50)
-slider.setSingleStep(1)
-slider.setPageStep(10)
-slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-slider.setTickInterval(10)
-
-value = slider.value()
-slider.valueChanged.connect(lambda v: print(f"Value: {v}"))
-```
-
-## Buttons
-
-### QPushButton
-
-```python
-from PySide6.QtWidgets import QPushButton
-from PySide6.QtGui import QIcon
-
-button = QPushButton("Click Me")
-
-# Icon
-button.setIcon(QIcon("icon.png"))
-button.setIconSize(QSize(16, 16))
-
-# Properties
-button.setEnabled(False)
-button.setDefault(True)  # Default button in dialog
-button.setFlat(True)  # No border
-
-# Checkable
-button.setCheckable(True)
-button.setChecked(True)
-button.toggled.connect(lambda c: print(f"Toggled: {c}"))
-
-# Menu
-menu = QMenu(button)
-menu.addAction("Option 1")
-menu.addAction("Option 2")
-button.setMenu(menu)
-
-# Signals
-button.clicked.connect(lambda: print("Clicked!"))
-button.pressed.connect(lambda: print("Pressed"))
-button.released.connect(lambda: print("Released"))
-```
-
-### QToolButton
-
-```python
-from PySide6.QtWidgets import QToolButton
-
-tool = QToolButton()
-tool.setIcon(QIcon("icon.png"))
-tool.setToolTip("Tool tip")
-tool.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-tool.setAutoRaise(True)  # Flat until hover
-```
-
-## Container Widgets
-
-### QGroupBox
-
-```python
-from PySide6.QtWidgets import QGroupBox, QVBoxLayout
-
-group = QGroupBox("Settings")
-group.setCheckable(True)
-group.setChecked(True)
-
-layout = QVBoxLayout(group)
-layout.addWidget(QCheckBox("Option 1"))
-layout.addWidget(QCheckBox("Option 2"))
-```
-
-### QTabWidget
-
-```python
-from PySide6.QtWidgets import QTabWidget, QWidget
-
-tabs = QTabWidget()
-
-# Add tabs
-page1 = QWidget()
-page2 = QWidget()
-tabs.addTab(page1, "Tab 1")
-tabs.addTab(page2, "Tab 2")
-
-# With icon
-tabs.addTab(page3, QIcon("icon.png"), "Tab 3")
-
-# Current tab
-tabs.setCurrentIndex(0)
-index = tabs.currentIndex()
-
-# Properties
-tabs.setTabsClosable(True)
-tabs.setMovable(True)
-tabs.setDocumentMode(True)  # Flat style
-
-# Signals
-tabs.currentChanged.connect(lambda i: print(f"Tab: {i}"))
-tabs.tabCloseRequested.connect(lambda i: tabs.removeTab(i))
-```
-
-### QScrollArea
-
-```python
-from PySide6.QtWidgets import QScrollArea, QLabel
-
-scroll = QScrollArea()
-
-# Content widget
-content = QLabel("Very long content...")
-content.setWordWrap(True)
-
-scroll.setWidget(content)
-scroll.setWidgetResizable(True)
-scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-```
-
-### QSplitter
-
-```python
-from PySide6.QtWidgets import QSplitter
-
-splitter = QSplitter(Qt.Orientation.Horizontal)
-splitter.addWidget(left_widget)
-splitter.addWidget(right_widget)
-
-# Sizes
-splitter.setSizes([200, 400])
-sizes = splitter.sizes()
-
-# Collapsible
-splitter.setChildrenCollapsible(False)
-```
-
-### QStackedWidget
-
-```python
-from PySide6.QtWidgets import QStackedWidget
-
-stack = QStackedWidget()
-stack.addWidget(page1)  # Index 0
-stack.addWidget(page2)  # Index 1
-stack.addWidget(page3)  # Index 2
-
-stack.setCurrentIndex(0)
-stack.setCurrentWidget(page2)
-current = stack.currentIndex()
-```
+See [widgets-api.md](references/widgets-api.md) for complete QStackedWidget API.
 
 ## Layout Discipline
 

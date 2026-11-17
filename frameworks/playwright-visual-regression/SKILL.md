@@ -301,16 +301,17 @@ docker run --rm -v $(pwd):/app mcr.microsoft.com/playwright:v1.50.0-noble
 - Simple components: `maxDiffPixelRatio: 0.001` (0.1%) because tight tolerance catches unintended changes
 - Text-heavy pages: `maxDiffPixelRatio: 0.01` (1%) because font rendering varies slightly
 - Full-page with fonts: `maxDiffPixelRatio: 0.02` (2%) because anti-aliasing creates pixel variance
-### 5. Handle Dynamic Content
 
-```typescript
 ### 5. Handle Dynamic Content
 
 **Do mask these elements:**
+
+```typescript
 - Timestamps — Change every test run
 - User avatars — Unique per session
 - Ad slots — Vary by campaign
 - Like counts — Dynamic social data
+```
 
 ```typescript
 test('feed with masking', async ({ page }) => {

@@ -427,10 +427,6 @@ class AdminQueryCountTest(TestCase):
             self.client.get('/admin/myapp/user/')
 ```
 
----
-
----
-
 ## Audit Logging with Formsets
 
 Track changes via `save_formset` for audit trails:

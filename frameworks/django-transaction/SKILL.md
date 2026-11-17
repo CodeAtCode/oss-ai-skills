@@ -460,15 +460,9 @@ def create_batch_orders(order_data_list):
 2. **Never call external APIs inside transactions** - Use `on_commit`
 3. **Use `select_for_update` for sequential ID generation** - Prevent races
 4. **Add unique constraints before upserts** - Ensure data integrity
+
 ## References
 
 - [Django Transactions Documentation](https://docs.djangoproject.com/en/stable/topics/db/transactions/) (primary reference for transaction management)
 - [select_for_update Documentation](https://docs.djangoproject.com/en/stable/ref/models/querysets/#select-for-update) (lookup locking options before implementing concurrency control)
-- Source: frameworks/django/SKILL.md (v2.2.0)
----
-
-## References
-
-- [Django Transactions Documentation](https://docs.djangoproject.com/en/stable/topics/db/transactions/)
-- [select_for_update Documentation](https://docs.djangoproject.com/en/stable/ref/models/querysets/#select-for-update)
 - Source: frameworks/django/SKILL.md (v2.2.0)

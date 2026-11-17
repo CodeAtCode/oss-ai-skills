@@ -261,17 +261,6 @@ def process_user_bad(raw_data: dict):
 
 ## Common Issues
 
-### Mutable Defaults
-
-```python
-# v2 error: mutable default
-class BadModel(BaseModel):
-    items: list = []
-
-# Fix: use default_factory
-class GoodModel(BaseModel):
-    items: list = Field(default_factory=list)
-```
 
 ### Performance
 
@@ -292,7 +281,3 @@ Load these reference files on demand:
 - GitHub: https://github.com/pydantic/pydantic (report issues, view source)
 - Pydantic Discord: https://discord.gg/pydantic (community support)
 - FastAPI: https://fastapi.tiangolo.com/ (see Pydantic integration in production)
-- Official Docs: https://docs.pydantic.dev/
-- GitHub: https://github.com/pydantic/pydantic
-- Pydantic Discord: https://discord.gg/pydantic
-- FastAPI: https://fastapi.tiangolo.com/

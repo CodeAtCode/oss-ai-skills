@@ -299,62 +299,9 @@ async def bad_pattern(urls):
 
 ## Anti-Patterns and Failure Modes
 
-### Socket Exhaustion from Session Per Request
 
-**Symptom:** `OSError: [Errno 24] Too many open files` or connection timeouts under load
 
-**Cause:** Creating `ClientSession()` inside request handlers or loops without reuse. Each session maintains its own connection pool and file descriptors.
 
-**Fix:**
-```python
-# ❌ ANTI-PATTERN: Session created per request
-async def handler(request):
-    session = aiohttp.ClientSession()  # New session every request
-    async with session.get(url) as resp:
-        return web.json_response(await resp.json())
-
-# ✅ FIX: Session stored in app, reused across requests
-async def init_app():
-    app = web.Application()
-    app['session'] = aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(limit=100)
-    )
-    return app
-
-async def cleanup_app(app):
-    await app['session'].close()
-
-app = await init_app()
-app.on_cleanup.append(cleanup_app)
-
-async def handler(request):
-    session = request.app['session']
-    async with session.get(url) as resp:
-        return web.json_response(await resp.json())
-```
-
-### No Total Timeout: Hung Server Holds Connections
-
-**Symptom:** Connections accumulate, eventually hitting `limit` in TCPConnector, new requests hang
-
-**Cause:** Missing `ClientTimeout` means no total timeout. A slow or hung server can hold connections indefinitely.
-
-**Fix:**
-```python
-# ❌ ANTI-PATTERN: No timeout specified
-session = aiohttp.ClientSession()
-async with session.get('https://slow-api.com/data') as resp:
-    # If server hangs, this waits forever
-    data = await resp.json()
-
-# ✅ FIX: Always set timeouts
-timeout = aiohttp.ClientTimeout(
-    total=30,       # Max total time for entire request
-    connect=5,      # Max time to establish connection
-    sock_read=10    # Max time between read operations
-)
-session = aiohttp.ClientSession(timeout=timeout)
-```
 
 ### Missing Read/Connect Timeouts
 

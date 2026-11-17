@@ -229,16 +229,6 @@ controller.thread.wait()
 # Now delete: controller.worker.deleteLater()
 ```
 
-## Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| UI freezes | Blocking operation in main thread | Move to worker thread |
-| Crashes on widget access | Accessing UI from worker thread | Use signals instead |
-| Memory leaks | Thread not cleaned up | Use deleteLater() and proper lifecycle |
-| Deadlocks | Multiple mutexes acquired in different order | Always acquire in same order, use timeout |
-| Race conditions | Shared data without locks | Use QMutex or atomic operations |
-
 ## Best Practices
 
 1. **Always use signals for cross-thread communication** - Direct widget access from threads causes crashes

@@ -369,12 +369,7 @@ See `references/common-issues.md` for detailed detection and fixes:
 | **Pool exhaustion** | "QueuePool limit reached" | `echo_pool=True` logs; too many open connections |
 | **Missing tables** | "relation does not exist" | Migration not run; check with `inspect(engine).get_table_names()` |
 
-See `references/common-issues.md` for:
-- **N+1 detection** via `echo=True`, query counting, `assert_num_queries`
-- **MissingGreenletError** - lazy load outside async context fix
-- **StaleDataError** - optimistic/pessimistic locking patterns
-- **DetachedInstanceError** - access within session, eager load, `expire_on_commit=False`
-- **Pool exhaustion** - `pool_size`, `max_overflow`, `pool_pre_ping`, `NullPool` for serverless
+
 
 ## Deep Dives
 

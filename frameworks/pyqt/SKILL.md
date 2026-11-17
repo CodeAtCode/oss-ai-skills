@@ -138,17 +138,6 @@ Use this routing to load only the sub-skill you need:
 
 Load these sub-skills for specialized topics:
 
-- **Signals/slots deep dive** → `pyqt/core` - Signal declaration, slot decorators, connections, typed signals
-- **Widgets, layouts, item views, event handling** → `pyqt/widgets` - Display/input/container widgets, QVBoxLayout/QHBoxLayout/QGridLayout, event filters, shortcuts
-- **Signals/slots deep dive** → `pyqt/core` - Signal declaration, slot decorators, connections, typed signals (load when declaring new signals or debugging connection issues)
-- **Widgets, layouts, item views, event handling** → `pyqt/widgets` - Display/input/container widgets, QVBoxLayout/QHBoxLayout/QGridLayout, event filters, shortcuts (load for custom widget composition)
-- **QSS styling and theming** → `pyqt/styling` - QSS syntax, pseudo-states, widget-specific styles, theming, platform differences (load before styling to avoid cross-platform bugs)
-- **Dialogs** → `pyqt/dialogs` - Standard dialogs (QFileDialog, QMessageBox, QInputDialog), custom QDialog patterns, modal/modeless
-- **Threading patterns** → `pyqt/threading` - QThread worker-object pattern, QThreadPool/QRunnable, thread safety, cancellation (critical for avoiding UI freezes)
-- **pytest-qt testing** → `pyqt/testing` - qtbot fixture, waitSignal, mouse/keyboard simulation, dialog testing, model/view testing
-- **Dialogs** → `pyqt/dialogs` - Standard dialogs (QFileDialog, QMessageBox, QInputDialog), custom QDialog patterns, modal/modeless
-- **Threading patterns** → `pyqt/threading` - QThread worker-object pattern, QThreadPool/QRunnable, thread safety, cancellation
-- **pytest-qt testing** → `pyqt/testing` - qtbot fixture, waitSignal, mouse/keyboard simulation, dialog testing, model/view testing
 
 ## PyQt vs PySide Comparison
 

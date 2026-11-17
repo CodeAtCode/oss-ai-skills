@@ -164,15 +164,18 @@ waydroid app list
 waydroid app launch com.package.name
 waydroid app uninstall com.package.name
 ```
-waydroid shell pm list packages
-waydroid shell getprop ro.product.model
-waydroid shell su -c "ls -la /sdcard/"
-```
 
 ### UI Control
-### Shell Access
 
-**Do use shell for debugging inside Android:**
+**Adjust window mode and appearance:**
+
+```bash
+waydroid session stop
+waydroid prop set mode FULLSCREEN
+waydroid session start
+```
+
+### Shell Access
 
 ```bash
 waydroid shell
@@ -180,6 +183,12 @@ waydroid shell pm list packages
 waydroid shell getprop ro.product.model
 waydroid shell su -c "ls -la /sdcard/"
 ```
+
+### Logging and Diagnostics
+
+**Check logs and properties:**
+
+```bash
 waydroid log -cat all
 waydroid prop get
 waydroid prop get ro.product.model

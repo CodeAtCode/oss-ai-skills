@@ -26,13 +26,6 @@ Complete reference for building cross-platform desktop applications with Qt fram
 
 Qt is a powerful C++ framework for cross-platform application development. It provides rich GUI capabilities, networking, database access, and more.
 
-**Key Characteristics:**
-- Cross-platform (Windows, macOS, Linux, mobile)
-- Rich widget library and QML for modern UIs
-- Signal-slot mechanism for event handling
-- Meta-Object System (MOC) for reflection
-- Comprehensive documentation and examples
-
 ## Qt Versions
 
 ### Qt5 vs Qt6
@@ -51,35 +44,12 @@ Qt is a powerful C++ framework for cross-platform application development. It pr
 
 ## Installation
 
-### Qt Online Installer (Recommended)
+See [official installation guide](https://www.qt.io/download) or your platform's package manager.
 
-```bash
-# Download from https://www.qt.io/download
-# Install using the Qt Online Installer
-# Select: Qt 6.x, Qt Creator, CMake, MinGW or MSVC
-```
+### Quick Setup
 
-### Package Managers
-
-```bash
-# macOS (Homebrew)
-brew install qt@6
-brew install cmake
-
-# Ubuntu/Debian
-sudo apt install qt6-base-dev qt6-tools-dev cmake
-
-# Arch Linux
-sudo pacman -S qt6-base cmake
-```
-
-### Setting PATH
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-export PATH="/path/to/Qt/6.5.0/gcc_64/bin:$PATH"
-export CMAKE_PREFIX_PATH="/path/to/Qt/6.5.0/gcc_64:$CMAKE_PREFIX_PATH"
-```
+- **Qt Online Installer**: Recommended for Windows/macOS
+- **Package managers**: `brew install qt@6` (macOS), `apt install qt6-base-dev` (Ubuntu)
 
 ## Deep Dives
 
@@ -129,6 +99,3 @@ See `references/qt6-features.md` for QString UTF-8 changes, graphics stack, and 
 - **Qt Creator:** https://www.qt.io/product/development-tools
 - **Qt Project Hosting:** https://codereview.qt-project.org/
 
-## Quick Reference
-
-See `references/quick-reference.md` for common headers, CMake components, and module lookup.
