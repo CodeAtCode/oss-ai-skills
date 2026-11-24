@@ -1,6 +1,5 @@
-> Loaded on demand from SKILL.md when the agent needs detailed information about sockets and constants.
-
 # Networking Reference
+
 This file is loaded on demand from `../SKILL.md` when you need detailed information about sockets and constants.
 
 ## Socket Networking

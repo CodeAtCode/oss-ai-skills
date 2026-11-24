@@ -1,6 +1,6 @@
 ---
 name: pytest
-description: Use when writing Python tests with pytest - fixtures, parametrization, markers, conftest layout, pytest-asyncio, pytest-django, coverage with pytest-cov, mocking with pytest-mock, parallel runs with xdist, mutation testing with mutmut, or CI integration
+description: Use when writing Python tests with pytest - fixtures, parametrization, markers, conftest layout, pytest-asyncio, pytest-django, coverage with pytest-cov, mocking with pytest-mock, parallel runs with xdist, or CI integration
 metadata:
   author: mte90
   version: 3.0.0
@@ -12,8 +12,6 @@ metadata:
     - unit-test
 ---
 
-> **Objective:** Use this skill to prevent false-positive tests and fragile test suites by enforcing fixture discipline, exact-value assertions, and mutation-testing validation of assertion quality.
-
 # pytest
 
 Complete reference for Python testing with pytest.
@@ -23,23 +21,21 @@ Complete reference for Python testing with pytest.
 pytest is a mature, full-featured Python testing framework that makes it easy to write simple and scalable tests.
 
 **Key Features:**
-
-- **Simple assertions** - Use plain `assert` statements instead of unittest-style assertions; pytest introspects expressions for detailed failure messages
-- **Fixtures** - Use `@pytest.fixture` for setup/teardown when tests need shared resources (database, temp files, mock objects)
-- **Parametrization** - Use `@pytest.mark.parametrize` when the same test logic applies to multiple input cases
-- **Plugins** - Load plugins like pytest-cov, pytest-mock, pytest-asyncio when you need coverage, mocking, or async support
-- **Parallel execution** - Use pytest-xdist (`-n auto`) when test suite runtime exceeds acceptable CI thresholds
-- **Informative failure messages** - Rely on pytest's default traceback compression; use `--tb=long` only when debugging complex failures
+- Simple: Write tests with plain assert statements
+- Powerful: Fixtures for setup/teardown
+- Parametrized: Run same test with different inputs
+- Plugins: Rich ecosystem of plugins
+- Parallel: Run tests in parallel with pytest-xdist
+- Detailed: Informative failure messages
 
 ### Installation
 
 ```bash
-pip install pytest>=9.0
-pip install pytest-cov>=5.0      # Coverage
-pip install pytest-mock     # Mocking
-pip install pytest-asyncio>=0.25 # Async tests
-pip install pytest-django>=4.8   # Django testing
-pip install pytest-xdist    # Parallel execution
+# uv (preferred on this machine)
+uv add pytest "pytest-cov>=5" pytest-mock "pytest-asyncio>=0.25" "pytest-django>=4.8" pytest-xdist
+
+# pip — constraints MUST be quoted: unquoted >= is shell redirection, not a version
+pip install "pytest>=9.0" "pytest-cov>=5.0" pytest-mock "pytest-asyncio>=0.25" "pytest-django>=4.8" pytest-xdist
 ```
 
 ### Python Version Requirements
@@ -104,41 +100,23 @@ def test_with_fixture(sample_data):
 ### Fixture Scopes
 
 ```python
-@pytest.fixture(scope="function")
-def function_fixture():
+@pytest.fixture(scope="function")   # also: "class", "module", "package", "session"
+def one_fixture():
     """Created for each test (default)."""
-    print("Setup: function scope")
-    yield {"data": "function"}
-    print("Teardown: function scope")
-
-@pytest.fixture(scope="class")
-def class_fixture():
-    """Created once per test class."""
-    print("Setup: class scope")
-    yield {"data": "class"}
-    print("Teardown: class scope")
-
-@pytest.fixture(scope="module")
-def module_fixture():
-    """Created once per module."""
-    print("Setup: module scope")
-    yield {"data": "module"}
-    print("Teardown: module scope")
-
-@pytest.fixture(scope="package")
-def package_fixture():
-    """Created once per package."""
-    print("Setup: package scope")
-    yield {"data": "package"}
-    print("Teardown: package scope")
-
-@pytest.fixture(scope="session")
-def session_fixture():
-    """Created once per test session."""
-    print("Setup: session scope")
-    yield {"data": "session"}
-    print("Teardown: session scope")
+    print("Setup")
+    yield {"data": "value"}
+    print("Teardown")
 ```
+
+| Scope | Created |
+|-------|---------|
+| `function` (default) | once per test |
+| `class` | once per test class |
+| `module` | once per file |
+| `package` | once per package |
+| `session` | once for the whole run |
+
+Higher scopes trade isolation for speed — reach for them when setup is expensive (database, containers) and read-only.
 
 ### Yield Fixtures (Setup/Teardown)
 
@@ -500,11 +478,9 @@ def test_config():
 
 For detailed coverage of these topics, load the corresponding reference files:
 
-- **Async Testing & Django** — `references/plugins-async-django.md`: pytest-asyncio, pytest-django, async patterns, sync_to_async bridge
-- **Tooling Plugins** — `references/plugins-tooling.md`: pytest-cov (coverage), pytest-mock, pytest-xdist, pytest-timeout
-- **Mocking & CI** — `references/mocking-ci.md`: unittest.mock patterns, monkeypatch, CI/CD integration
-- **Mutation Testing** — `references/mutation-testing.md`: mutmut workflow, cargo-mutants, Stryker, when tests don't assert anything, fork hazards — load when verifying assertion quality beyond coverage
-- **Property-Based Testing** — `references/property-based-testing.md`: Hypothesis @given + strategies, deadline/max_examples/profiles, shrinking-to-@example workflow — load when testing parsers, roundtrips, or invariants over generated inputs
+- **Async Testing & Django** — `references/plugins-async-django.md`: pytest-asyncio, pytest-django, async Django patterns, sync_to_async bridge, common pitfalls
+- **Tooling Plugins** — `references/plugins-tooling.md`: pytest-cov (coverage), pytest-mock (mocking), pytest-xdist (parallel), pytest-timeout, pytest-env, pytest-randomly, pytest-sugar, pytest-clarity, pytest-benchmark
+- **Mocking & CI** — `references/mocking-ci.md`: unittest.mock patterns, monkeypatch, GitHub Actions, GitLab CI, pdb debugging
 
 ## Best Practices
 
@@ -565,30 +541,33 @@ def test_user_creation():
     assert user.check_password("password123")
 ```
 
-### 4. One Behavior Per Test
-
-Each test verifies one behavior — that is not "one assertion": multiple assertions on the SAME behavior are fine and often clearer than splitting.
+### 4. One Assertion Per Test (When Possible)
 
 ```python
-# Good — all assertions verify one behavior: create_user persisted each field
-def test_create_user_persists_fields():
-    user = create_user(username="test", email="test@example.com")
-    assert user.username == "test"
-    assert user.email == "test@example.com"
-
-# Bad — two different behaviors in one test; a failure doesn't say which broke
-def test_user_and_password():
+# Bad
+def test_user():
     user = create_user()
     assert user.username == "test"
-    assert user.check_password("password123")
+    assert user.email == "test@example.com"
+    assert user.is_active is True
+
+# Good
+def test_user_has_correct_username():
+    user = create_user()
+    assert user.username == "test"
+
+def test_user_has_correct_email():
+    user = create_user()
+    assert user.email == "test@example.com"
+
+def test_user_is_active_by_default():
+    user = create_user()
+    assert user.is_active is True
 ```
-
-Split into separate tests when behaviors differ. The real driver is setup cost: duplicating expensive setup across near-identical tests is worse than a second assertion on the same behavior — share setup with fixtures instead of merging unrelated behaviors into one test.
-
-See `references/mutation-testing.md` for mutmut workflow, cargo-mutants, Stryker, and mutation testing best practices.
 
 ## References
 
-- **Official Documentation**: https://docs.pytest.org/ (primary reference for all pytest features)
-- **GitHub Repository**: https://github.com/pytest-dev/pytest (report bugs, view source)
-- **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html (discover ecosystem plugins before writing custom solutions)
+- **Official Documentation**: https://docs.pytest.org/
+- **GitHub Repository**: https://github.com/pytest-dev/pytest
+- **pytest Plugins**: https://docs.pytest.org/en/latest/reference/plugin_list.html
+- **Book**: "Python Testing with pytest" by Brian Okken

@@ -1,6 +1,5 @@
-> Loaded on demand from SKILL.md when the agent needs complete working scripts and advanced examples.
-
 # Examples Reference
+
 This file is loaded on demand from `../SKILL.md` when you need complete working scripts and advanced examples.
 
 ## Basic Examples

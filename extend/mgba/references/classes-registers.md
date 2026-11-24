@@ -1,6 +1,5 @@
-> Loaded on demand from SKILL.md when the agent needs detailed information about MemoryDomain, TextBuffer classes, and CPU registers.
-
 # Classes & Registers Reference
+
 This file is loaded on demand from `../SKILL.md` when you need detailed information about MemoryDomain, TextBuffer classes, and CPU registers.
 
 ## MemoryDomain Class

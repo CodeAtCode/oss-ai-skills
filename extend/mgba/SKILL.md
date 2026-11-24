@@ -1,9 +1,9 @@
 ---
 name: mgba
-description: Use when scripting mGBA emulator automation in Lua - console API, ROM and save state operations, frame callbacks, input handling, memory reading for cheats and RAM watches, sockets, or TAS and speedrunner tooling
+description: Use when scripting mGBA emulator automation in Lua - console API, ROM and save state operations, frame callbacks, input handling, memory reading for cheats and RAM watches, sockets, TAS and speedrunner tooling, headless parity testing against a reference emulator
 metadata:
   author: mte90
-  version: 2.0.0
+  version: 2.1.0
   tags:
     - lua
     - emulator
@@ -13,33 +13,14 @@ metadata:
     - memory-hacking
 ---
 
-> **Objective:** Use this skill to reduce [desynced-TAS runs, memory-read misalignment bugs, frame-callback race incidents, save-state-corruption losses] by enforcing [frame-accurate discipline, address-validation rules, callback-ordering patterns below].
-
 # mGBA Scripting
 
-Lua scripting for mGBA emulator.
+Lua scripting for mGBA emulator (built-in since 0.10).
 
-mGBA has built-in Lua scripting capabilities (Tools → Scripting menu).
-**Key Features:**
-- Full memory access (ROM, RAM, MMIO)
-- Input manipulation (button presses)
-- Save state management
-- Callbacks for frame/events
-- TCP socket networking
-- Console output
-- Screenshot capture
-
-### Opening Scripting Console
-
-```
-Tools → Scripting...
-```
-
-This opens a console where you can load and run Lua scripts.
+**GUI:** Tools → Scripting… opens the console where scripts load and run.
+**Headless/CI:** scripting-related CLI flags vary by mGBA version — run `mgba --help` (or your frontend binary) on the target machine and verify the flags exist before relying on them; do not assume.
 
 ## Top-Level Objects
-
-### Available Objects
 
 ```lua
 -- emu: CoreAdapter instance (available when game loaded)
@@ -50,355 +31,142 @@ This opens a console where you can load and run Lua scripts.
 -- socket: TCP socket library
 ```
 
-### Console Output
-
-Do use `console.log/warn/error` for debugging because script errors don't crash the emulator.
-
 ```lua
-console.log("Info message")
-console.warn("Warning message")
-console.error("Error message")
-
--- Create text buffer for persistent display
+console.log("Info"); console.warn("Warning"); console.error("Error")
 buffer = console.createBuffer("My Buffer")
-buffer:print("Text in buffer")
-buffer:clear()
-```
+buffer:print("Text in buffer"); buffer:clear()
 
-See `references/classes-registers.md` for TextBuffer class details.
-
-### Utility Functions
-
-```lua
--- Expand bitmask to list
-bits = util.expandBitmask(0xFF)  -- {0,1,2,3,4,5,6,7}
-
--- Make bitmask from list
-mask = util.makeBitmask({0, 3, 5})  -- 0x29
+bits = util.expandBitmask(0xFF)      -- {0,1,2,3,4,5,6,7}
+mask = util.makeBitmask({0, 3, 5})   -- 0x29
 ```
 
 ## Core API
 
 ### ROM Operations
 
-Do validate ROM loaded before operations because calling API on unloaded game returns nil.
-
 ```lua
--- Load ROM file
 success = emu.loadFile("path/to/rom.gba")
-
--- Get game info
-title = emu.getGameTitle()  -- "POKEMON FIRE"
-code = emu.getGameCode()   -- "AGB-P-FE"
-size = emu.romSize()       -- ROM size in bytes
-platform = emu.platform()  -- 0=GBA, 1=GB
-checksum = emu.checksum()  -- CRC32
+title  = emu.getGameTitle()  -- "POKEMON FIRE"
+code   = emu.getGameCode()   -- "AGB-P-FE"
+size   = emu.romSize()
+platform = emu.platform()    -- 0=GBA, 1=GB
+checksum = emu.checksum()    -- CRC32
+emu.reset()
 ```
 
 ### Save States
 
-Do save state before risky operations because crashes lose progress. Do use slots (0-9) for quick saves because file I/O is slow.
-
 ```lua
--- Save to file
-emu.saveStateFile("path/to/state.state")
+emu.saveStateFile("path/to/state.state")   emu.loadStateFile("path/to/state.state")
+emu.saveStateSlot(0)                       emu.loadStateSlot(0)
+buffer = emu.saveStateBuffer()             emu.loadStateBuffer(buffer)
+emu.autoloadSave()
 
--- Load from file
-emu.loadStateFile("path/to/state.state")
-
--- Save to slot (0-9)
-emu.saveStateSlot(0)
-emu.loadStateSlot(0)
-
--- Save/load buffer (faster for frequent saves)
-buffer = emu.saveStateBuffer()
-emu.loadStateBuffer(buffer)
-
--- Flags: SCREENSHOT=1, SAVEDATA=2, CHEATS=4, RTC=8, METADATA=16
--- ALL = 31
-emu.saveStateSlot(0, 31)  -- Save everything
+-- Flags: SCREENSHOT=1, SAVEDATA=2, CHEATS=4, RTC=8, METADATA=16, ALL=31
+emu.saveStateSlot(0, 31)
 ```
-
-See `references/networking.md` for save state flag constants.
 
 ### Frame Control
 
-Do run frames in callbacks because manual stepping desyncs TAS runs.
-
 ```lua
--- Run one frame
-emu.runFrame()
-
--- Run one instruction
-emu.step()
-
--- Get current frame number
-frame = emu.currentFrame()
-
--- Get cycle info
-cycles = emu.frameCycles()    -- Cycles per frame
-freq = emu.frequency()         -- Cycles per second
+emu.runFrame()      -- one frame
+emu.step()          -- one instruction
+emu.currentFrame()
+emu.frameCycles()   -- cycles per frame
+emu.frequency()      -- cycles per second
+emu.screenshot("frame.png")
 ```
 
-### Input Handling
-
-Do clear keys every frame because held keys accumulate and break TAS precision. Do handle input in frame callbacks because timing matters for frame-perfect inputs.
+### Input
 
 ```lua
--- Set all keys at once
-emu.setKeys(0x0000)  -- No keys
-
--- Add keys (OR with existing)
-emu.addKeys(C.GBA_KEY.A + C.GBA_KEY.R)
-
--- Clear keys
+emu.setKeys(0x0000)                      -- all keys at once
+emu.addKeys(C.GBA_KEY.A + C.GBA_KEY.R)    -- OR into current
 emu.clearKeys(C.GBA_KEY.B)
-
--- Check key state
-if emu.getKey(C.GBA_KEY.UP) == 1 then
-    print("UP is pressed")
-end
-
--- Get all pressed keys
+emu.addKey(k); emu.clearKey(k)
+if emu.getKey(C.GBA_KEY.UP) == 1 then end
 keys = emu.getKeys()
 ```
 
-See `references/examples.md` for input patterns (button masher, auto-farmer, TAS helper).
+```lua
+-- GBA: A=0 B=1 SELECT=2 START=3 RIGHT=4 LEFT=5 UP=6 DOWN=7 R=8 L=9
+-- GB:  same minus R/L (C.GB_KEY.*)
+```
 
 ## Memory Access
 
-### Reading Memory
-
-Do validate addresses against ROM map before reading because wrong offsets read garbage and desync the TAS.
-
 ```lua
--- Read 8/16/32 bit values
-value8 = emu.read8(address)
-value16 = emu.read16(address)
-value32 = emu.read32(address)
-
--- Read range
+v8  = emu.read8(addr); v16 = emu.read16(addr); v32 = emu.read32(addr)
+emu.write8(addr, v);  emu.write16(addr, v);  emu.write32(addr, v)
 data = emu.readRange(address, length)
-
--- Read from memory domain
-rom = emu.memory["cart0"]
-value = rom:read8(offset)
-data = rom:readRange(offset, length)
-```
-
-### Writing Memory
-
-Do write to RAM domains only because ROM writes corrupt the cartridge image.
-
-```lua
--- Write 8/16/32 bit values
-emu.write8(address, value)
-emu.write16(address, value)
-emu.write32(address, value)
+rom = emu.memory["cart0"]; value = rom:read8(offset)   -- :read8/:read16/:read32/:readRange
+emu.readRegister(name); emu.writeRegister(name, val)
 ```
 
 ### Memory Domains (GBA)
 
-Do use named domains because raw addresses are error-prone.
-
 ```lua
--- Available memory domains
-emu.memory["bios"]    -- BIOS (0x00000000)
-emu.memory["wram"]     -- EWRAM (0x02000000)
-emu.memory["iwram"]    -- IWRAM (0x03000000)
-emu.memory["io"]       -- MMIO (0x04000000)
-emu.memory["palette"]  -- Palette (0x05000000)
-emu.memory["vram"]     -- VRAM (0x06000000)
-emu.memory["oam"]      -- OAM (0x07000000)
-emu.memory["cart0"]    -- ROM (0x08000000)
-emu.memory["cart1"]    -- ROM WS1 (0x0a000000)
-emu.memory["cart2"]    -- ROM WS2 (0x0c000000)
+emu.memory["bios"]     -- 0x00000000   emu.memory["io"]       -- 0x04000000
+emu.memory["wram"]     -- 0x02000000   emu.memory["palette"]  -- 0x05000000
+emu.memory["iwram"]    -- 0x03000000   emu.memory["vram"]     -- 0x06000000
+emu.memory["oam"]      -- 0x07000000   emu.memory["cart0"]    -- 0x08000000
 ```
 
-### Memory Domains (GB)
-
-```lua
-emu.memory["cart0"]  -- ROM Bank ($0000)
-emu.memory["vram"]   -- VRAM ($8000)
-emu.memory["sram"]   -- SRAM ($a000)
-emu.memory["wram"]   -- WRAM ($c000)
-emu.memory["oam"]    -- OAM ($fe00)
-emu.memory["io"]     -- MMIO ($ff00)
-emu.memory["hram"]   -- HRAM ($ff80)
-```
-
-See `references/classes-registers.md` for MemoryDomain class methods and ROM analysis examples.
+GB: `cart0` (ROM), `vram` ($8000), `sram` ($a000), `wram` ($c000), `oam` ($fe00), `io` ($ff00), `hram` ($ff80).
 
 ## Callbacks
 
-### Adding Callbacks
-
-Do register frame callbacks before emulation starts because late registration misses the first vblank and desyncs frame counters. Do store callback IDs because you need them to remove callbacks later.
-
 ```lua
--- Add callback (returns callback ID)
-id = callbacks.add("frame", function()
-    -- Called every frame
-end)
-
-id = callbacks.add("start", function()
-    -- Called when emulation starts
-end)
-
-id = callbacks.add("reset", function()
-    -- Called when emulation resets
-end)
-
-id = callbacks.add("shutdown", function()
-    -- Called when emulation stops
-end)
-
--- Remove callback
-callbacks.remove(id)
+id = callbacks.add("frame", function() ... end)   callbacks.remove(id)
+-- alarm · crashed · frame · keysRead · reset · savedataUpdated · sleep · shutdown · start · stop
 ```
 
-### Available Callbacks
+## Agent Workflow — headless parity testing (the pattern that saves whole lanes)
+
+Deterministic comparison against a reference run, **without ever dumping memory into context**:
+
+1. **Anchor:** load ROM, reset to a fixed point, `emu.saveStateBuffer()` once — reuse it for every comparison (never re-run the intro to "get to" the same frame; that is not deterministic).
+2. **Probe:** at frames of interest, read the regions that define behavior (`iwram` structs, `vram`, `oam`) — through `readRange`, but hash them in Lua, do not print them:
 
 ```lua
--- alarm     - In-game alarm went off
--- crashed   - Emulation crashed
--- frame     - Frame finished
--- keysRead  - About to read key input
--- reset     - Emulation reset
--- savedataUpdated - Save data modified
--- sleep     - Entered low-power mode
--- shutdown  - Powered off
--- start     - Started
--- stop      - Voluntarily shut down
+local function fnv1a(data)          -- 32-bit FNV-1a, pure Lua
+  local h = 0x811c9dc5
+  for i = 1, #data do
+    h = (h ~ data:byte(i)) & 0xffffffff
+    h = (h * 0x01000193) & 0xffffffff
+  end
+  return string.format("%08x", h)
+end
+local h = fnv1a(emu.memory["vram"]:readRange(0, 0x18000))  -- VRAM, hashed
+console.log(string.format("frame=%d vram=%s oam=%s", emu.currentFrame(),
+  h, fnv1a(emu.memory["oam"]:readRange(0, 0x400))))
 ```
 
-### Frame Callback Example
+3. **Compare:** emit "frame | region | hash" rows; a parity failure is a divergent hash, resolved by binary-searching the first frame where the hashes split — not by eyeballing buffers.
+4. **Token economy:** VRAM alone is 96 KB — printing ranges is a context bomb. Hash always; dump a raw range only for the single first-divergence region, bounded (≤256 bytes).
 
-Do clear keys after adding because held keys persist across frames.
-
-```lua
--- Auto-press A every 10 frames
-local counter = 0
-callbacks.add("frame", function()
-    counter = counter + 1
-    if counter >= 10 then
-        emu.addKeys(C.GBA_KEY.A)
-    else
-        emu.clearKeys(C.GBA_KEY.A)
-    end
-end)
-```
-
-See `references/examples.md` for complete callback patterns (RAM watch, save state timer, speedrunner splits, TAS record/playback).
-
-## Deep Dives
-
-Detailed reference material is available in the `references/` directory. Load these on demand for specific topics:
-
-- **Classes & Registers** — MemoryDomain class, TextBuffer class, GBA/GB register details
-  - `references/classes-registers.md`
-- **Networking** — Socket API details and constants
-  - `references/networking.md`
-- **Examples** — Complete working scripts (cheats, TAS tools, networked scripts)
-  - `references/examples.md`
+Related skills: memory-forensics (savestate/RAM capture analysis), bpcore-engine (the on-device Lua engine), binary-analysis-patterns + ghidra (static side of the same question).
 
 ## Best Practices
 
-### 1. Always Clear Keys
-
-Do clear keys every frame because held keys accumulate and cause unintended input.
-
-```lua
--- Bad: Keys stay pressed
-callbacks.add("frame", function()
-    emu.addKeys(C.GBA_KEY.A)
-end)
-
--- Good: Clear after use
-callbacks.add("frame", function()
-    emu.addKeys(C.GBA_KEY.A)
-    emu.clearKeys(C.GBA_KEY.A)
-end)
-```
-
-### 2. Use Frame Callback for Input
-
-Do handle input in frame callbacks because input timing must align with emulation cycle.
-
-```lua
--- Input should be handled in frame callback
-callbacks.add("frame", function()
-    if emu.getKey(6) == 1 then  -- UP pressed
-        -- Handle input
-    end
-end)
-```
-
-### 3. Watch for Crashes
-
-Do register crash handler because unhandled crashes lose unsaved state.
-
-```lua
-callbacks.add("crashed", function()
-    console.error("Emulation crashed!")
-    -- Save state before exit
-    emu.saveStateFile("crash.state")
-end)
-```
-
-### 4. Reset State on Script Load
-
-Do clear previous state when loading script because stale callbacks and keys persist.
-
-```lua
--- Clear any previous state when loading
-emu.clearKeys(0xFFFF)
-callbacks.remove(cbid)  -- Remove old callbacks
-```
-
-### 5. Validate Memory Addresses
-
-Do verify addresses before reading because wrong addresses return garbage data.
-
-```lua
--- Check address is in valid range
-local wram = emu.memory["wram"]
-local base = wram:base()
-local bound = wram:bound()
-
-if addr >= base and addr < bound then
-    value = emu.read16(addr)
-else
-    console.error("Invalid address!")
-end
-```
-
-See `references/classes-registers.md` for MemoryDomain base/bound methods.
+1. **Always clear keys** after use in a frame callback — stale presses are the #1 input bug.
+2. Input belongs in the `frame` callback.
+3. Save state on `crashed` before doing anything else.
+4. On script load: clear keys and remove old callbacks.
 
 ## Common Issues
 
-### Address Not Found
+- **Address not found:** games relocate RAM — find addresses with mGBA's cheat search or memory viewer, not by guessing.
+- **Keys ignored:** some games poll oddly — prefer `addKeys` over `setKeys`.
+- **Blocking sockets:** socket connect blocks the emulation thread — poll from callbacks.
 
-Some games use different RAM locations because memory layout varies by title. Use mGBA's cheat search or memory viewer to find correct addresses.
+## Deep Dives (references/ directory, load on demand)
 
-### Keys Not Working
-
-Some games poll keys differently because input handling varies. Try using addKeys instead of setKeys.
-
-```lua
-emu.addKeys(C.GBA_KEY.A)  -- OR with existing
-```
-
-### Socket Connection Timeout
-
-Socket connect is blocking because it waits for server response. Use connect with timeout or run in separate thread. For async, use callbacks and poll().
-
-See `references/networking.md` for socket patterns.
+- `references/classes-registers.md` — MemoryDomain, TextBuffer, GBA/GB registers
+- `references/networking.md` — socket API and constants
+- `references/examples.md` — complete scripts (cheats, TAS, networked)
 
 ## References
 
-- **Official Documentation**: https://mgba.io/docs/scripting.html
-- **mGBA GitHub**: https://github.com/mgba-emu/mgba
-- **Forums**: https://forums.mgba.io/
-- **Discord**: https://discord.gg/em2M2sG
-- **Scripting API Reference**: https://mgba.io/docs/scripting.html
+- https://mgba.io/docs/scripting.html
+- https://github.com/mgba-emu/mgba

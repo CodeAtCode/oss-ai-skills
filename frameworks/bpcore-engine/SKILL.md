@@ -3,15 +3,13 @@ name: bpcore-engine
 description: Use when building GBA games with the BPCore Lua engine - entity, sprite and tilemap functions, SRAM save and load, link cable multiplayer protocol, camera and scrolling, or optimization patterns
 metadata:
   author: mte90
-  version: 2.0.0
+  version: 2.0.1
   tags:
     - lua
     - gba
     - game-engine
     - gameboy-advance
 ---
-
-> **Objective:** Use this skill to reduce SRAM-corruption incidents, sprite-flicker bugs, link-cable desync, and tilemap-tearing crashes by enforcing save-format discipline, VRAM-budget rules, and sync-protocol patterns below.
 
 # BPCore Engine Skill
 
@@ -23,44 +21,121 @@ BPCore Engine (Blind jumP Core Engine) is a Lua game framework for GBA that comb
 
 The engine provides sprite rendering, tile-based graphics, entity management with collision, button input, UTF-8 text, audio, save/load via SRAM, and multiplayer through the link cable. The build system uses Lua to package resources into ROM.
 
-## Deep Dives
+## API Reference
 
-Complex topics are split into reference files loaded on demand from `SKILL.md`:
+### Entity Functions
 
-- **API Reference** — All 60+ engine functions with signatures → [`references/api-reference.md`](references/api-reference.md)
-- **Save/Load to SRAM** — Persistent storage patterns, checksums, marker bytes → [`references/save-load.md`](references/save-load.md)
-- **Multiplayer Link Cable Protocol** — Packet formats, binary I/O, client-server sync → [`references/multiplayer.md`](references/multiplayer.md)
-- **Optimization & Camera** — Sprite batching, entity pools, parallax scrolling → [`references/optimization.md`](references/optimization.md)
-- **Error Handling** — Bounds checking, validation patterns → [`references/error-handling.md`](references/error-handling.md)
+| Function | Description |
+|----------|-------------|
+| `ent()` | Create entity, returns handle |
+| `entpos(e, x, y)` | Set position, returns self |
+| `entz(e, z)` | Set Z-order (0-255), returns self |
+| `entspr(e, sprite, xflip, yflip)` | Set sprite and flips, returns self |
+| `entspd(e, x, y)` | Set movement speed, returns self |
+| `entslot(e, slot, value)` | Store in slot, returns self |
+| `entslots(e, count)` | Allocate slots, returns self |
+| `entanim(e, start, len, rate)` | Set animation |
+| `entag(e, tag)` | Set collision tag, returns self |
+| `enthb(e, ox, oy, w, h)` | Set hitbox, returns self |
+| `del(e, [auto])` | Delete entity |
+| `ents()` | Get all entities table |
+| `enthb(e)` | Get hitbox (getter form) |
 
-## Critical Rules (do X because Y)
+### Sprite & Tile Functions
 
-### Memory & VRAM Discipline
+| Function | Description |
+|----------|-------------|
+| `txtr(layer_id, filename)` | Load texture from file |
+| `txtr(layer_id, ptr, len)` | Load from pointer/length |
+| `file(filename)` | Get file pointer/length |
+| `spr(sprite_id, x, y)` | Draw sprite |
+| `spr(sprite_id, x, y, xflip, yflip)` | Draw with flips |
+| `tile(layer_id, x, y, [num])` | Draw/read tile |
+| `tilemap(f, layer, w, h, dx, dy, sx, sy)` | Load CSV tilemap |
+| `clear()` | Clear sprites, VSync |
+| `display()` | Send sprites to display |
+| `fade(amount, [color], [tl], [bg])` | Fade layers |
 
-- **Pre-allocate entity pools before runtime because** runtime allocation during gameplay causes frame stalls and can exhaust the 128-entity limit mid-level.
-- **Batch stationary sprites into a single draw loop because** scattered spr() calls across update logic increase CPU overhead and risk missing vblank deadlines.
-- **Keep tile updates under 10 per frame because** each tile() call writes to VRAM during active display, causing visible tearing if it hits vblank.
-- **Distribute sprites vertically across scanlines because** GBA can only render ~10 sprites per scanline; exceeding this causes flickering on crowded rows.
+### Camera & Scroll
 
-### SRAM Save/Load Discipline
+| Function | Description |
+|----------|-------------|
+| `camera(x, y)` | Set camera center |
+| `scroll(layer, x, y)` | Set layer scroll |
+| `priority(s, bg, t0, t1)` | Set render priority |
 
-- **Validate save data size before SRAM write because** oversized data corrupts adjacent save slots and can overwrite the marker byte.
-- **Write checksums after every save because** SRAM bit-flips during power loss leave corrupted data that loads silently without validation.
-- **Verify marker byte (0x42) before loading because** loading uninitialized SRAM returns garbage that crashes game logic expecting valid state.
-- **Use atomic writes (temp buffer then commit) because** power loss mid-write leaves partial data that passes checksum but contains torn state.
+### Collision
 
-### Link Cable Multiplayer Discipline
+| Function | Description |
+|----------|-------------|
+| `ecolle(e1, e2)` | Check collision (bool) |
+| `ecoll(e, tag)` | Find tag matches (array) |
 
-- **Keep packets under 11 bytes because** the hardware queue rejects longer messages, causing silent send failures and desync.
-- **Drain recv() in a loop each frame because** unprocessed packets overflow the 64-packet receive queue, losing critical state updates.
-- **Handle disconnects by resetting game state because** stale connections send garbage after cable removal, corrupting opponent position tracking.
-- **Use client-server authority model because** dual-authority games desync when both players predict differently; one peer validates all inputs.
+### Input
 
-### Camera & Scrolling Discipline
+| Function | Description |
+|----------|-------------|
+| `btn(num)` | Button held? (bool) |
+| `btnp(num)` | Button pressed? (bool) |
+| `btnnp(num)` | Button released? (bool) |
 
-- **Clamp camera coordinates to world bounds because** unbounded camera(x, y) exposes blank VRAM edges when player reaches level limits.
-- **Update scroll() after camera() because** scroll offsets are relative to camera position; reversing the order causes parallax misalignment.
-- **Use fixed-point math for scroll interpolation because** GBA lacks FPU; floating-point emulation is slow and causes jittery camera movement.
+### Graphics
+
+| Function | Description |
+|----------|-------------|
+| `print(text, x, y, [fg], [bg])` | Print to overlay |
+
+### Audio
+
+| Function | Description |
+|----------|-------------|
+| `music(f, [offset])` | Play background music |
+| `sound(f, priority)` | Play sound effect |
+
+### Memory
+
+| Function | Description |
+|----------|-------------|
+| `poke(addr, value)` | Write byte |
+| `poke4(addr, value)` | Write 32-bit word |
+| `peek(addr)` | Read byte |
+| `peek4(addr)` | Read 32-bit word |
+| `memput(addr, data)` | Write to memory |
+| `memget(addr, [len])` | Read from memory |
+
+### System
+
+| Function | Description |
+|----------|-------------|
+| `delta()` | Microseconds since last call |
+| `sleep(frames)` | Sleep N frames |
+| `startup_time()` | Get boot time |
+| `fdog()` | Feed watchdog timer |
+| `log(msg)` | Debug log |
+| `rline()` | Get raster line |
+| `flimit(fps)` | Set frame rate limit |
+| `next_script(filename)` | Switch Lua script |
+
+### Multiplayer
+
+| Function | Description |
+|----------|-------------|
+| `connect(timeout)` | Connect (blocking) |
+| `disconnect()` | Disconnect |
+| `send(data)` | Send message (max 11 bytes) |
+| `recv()` | Receive message |
+| `send_iram(ptr)` | Send from IRAM |
+| `recv_iram(ptr)` | Receive to IRAM |
+
+### Layer IDs
+
+| ID | Layer | Size | Description |
+|----|-------|------|-------------|
+| 0 | Overlay | 32x32 tiles | Front, persistent |
+| 1 | Tile Layer 1 | 64x64 tiles | Behind sprites, in front of tile_0 |
+| 2 | Tile Layer 0 | 64x64 tiles | Main background |
+| 3 | Background | 32x32 tiles | Back layer |
+| 4 | Sprites | Dynamic | On-top sprites |
 
 ## Installation & Project Structure
 
@@ -68,24 +143,11 @@ Complex topics are split into reference files loaded on demand from `SKILL.md`:
 
 **Important**: BPCore Engine requires `BPCoreEngine.gba` base ROM with compiled C++ code and Lua interpreter. This is **not** a custom ROM you create.
 
-#### Where to Obtain
+1. **Official Repository**: clone from [GitHub](https://github.com/evanbowman/BPCore-Engine) — `git clone https://github.com/evanbowman/BPCore-Engine.git`
+2. **Required Files**: `BPCoreEngine.gba` (engine base ROM, ~3.5 MB), `build.lua` (build script, Lua 5.3), `test/` example projects.
+3. **Alternatives**: GitHub Releases may have pre-built GBA files; mGBA includes a BPCore version in some distributions.
 
-1. **Official Repository**: Clone from [GitHub](https://github.com/evanbowman/BPCore-Engine)
-   ```bash
-   git clone https://github.com/evanbowman/BPCore-Engine.git
-   cd BPCore-Engine
-   ```
-
-2. **Required Files**: Repository contains:
-   - `BPCoreEngine.gba` - Engine base ROM (~3.5 MB)
-   - `build.lua` - Build script (Lua 5.3)
-   - `test/` - Example projects
-
-3. **Alternatives**:
-   - GitHub Releases may have pre-built GBA files
-   - mGBA emulator includes BPCore version in some distributions
-
-#### File Placement
+### File Placement
 
 ```
 your-project/
@@ -95,19 +157,30 @@ your-project/
 ├── overlay.bmp                # Text/UI tiles
 ├── tile0.bmp                  # Main background (64x64 tiles)
 ├── tile1.bmp                  # Foreground (64x64 tiles)
-├── spritesheet.bmp           # Sprites (16x16)
+├── spritesheet.bmp           # Sprites
 ├── music.raw                  # Music (mono 16kHz PCM)
 ├── sfx.wav                    # Sound effects
 ├── main.lua                   # Entry point
 └── data.txt                   # Resources
 ```
 
+### Build Layout
+
+```
+./
+├── src/            # main.lua, game.lua, menu.lua, level1.csv (tilemaps)
+├── assets/
+│   ├── graphics/   # spritesheet.bmp, tiles0.bmp, tiles1.bmp
+│   ├── audio/      # music.raw, jump.wav, coin.wav
+│   └── tilemaps/   # world.csv
+├── build.lua
+├── BPCoreEngine.gba
+└── dist/yourgame.gba
+```
+
 ### Building Your ROM
 
-**Step 1**: Create `manifest.lua`
-### Building Your ROM
-
-**Step 1**: Create `manifest.lua`
+**Step 1** — `manifest.lua`:
 
 ```lua
 local app = {
@@ -120,46 +193,44 @@ local app = {
     scripts = { "main.lua", "game.lua", "menu.lua" },
     misc = { "level1.csv" }
 }
-
 return app
 ```
 
-**Step 2**: Run build script
+**Step 2** — build: `lua build.lua manifest.lua BPCoreEngine.gba output.gba`
 
-```bash
-lua build.lua manifest.lua BPCoreEngine.gba output.gba
-```
+**Step 3** — verify: build checks manifest files exist, formats valid, scripts readable, output ROM created (~3.5-4 MB).
 
-**Step 3**: Verify
-
-Build checks manifest files exist, formats are valid, scripts readable, output ROM created (~3.5-4 MB).
-
-**Step 4**: Test with mGBA
-
-```bash
-mGBA output.gba --log --memview
-```
-
-`--log` shows engine log() output, `--memview` opens memory viewer for debugging.
+**Step 4** — test in mGBA (see the mgba skill for scripting-driven verification of the built ROM).
 
 ### File Formats
 
-**BMP Tilesets**: Indexed color (256 colors), tiles are 8x8 pixels. Overlay: 16x16 tiles, Tile_0/1: 32x32 tiles, Sprites: 8x8 sprites.
+- **BMP tilesets**: indexed color (256 colors), tiles 8x8 px. Overlay: 16x16 tiles, Tile_0/1: 32x32 tiles, Sprites: 8x8.
+- **Audio**: mono 16kHz signed 8-bit PCM. Convert: `ffmpeg -i input.mp3 -ar 16000 -ac 1 -f s8 output.raw`
+- **Tilemap CSV**: comma-separated tile indices, one tile row per line, indices start at 1 (0 = empty).
 
-**Audio**: Mono 16kHz signed 8-bit PCM. Convert with FFmpeg:
-```bash
-ffmpeg -i input.mp3 -ar 16000 -ac 1 -f s8 output.raw
-```
+## Deep Dives
 
-**Tilemap CSV**: Comma-separated tile indices, each row is one tile row. Tile indices start at 1 (0 = empty).
+Complex topics live in reference files, loaded on demand:
+
+- **Save/Load to SRAM** — persistent storage patterns, checksums, marker bytes → [references/save-load.md](references/save-load.md)
+- **Multiplayer Link Cable Protocol** — packet formats, binary I/O, client-server sync → [references/multiplayer.md](references/multiplayer.md)
+- **Optimization & Camera** — sprite batching, entity pools, parallax scrolling → [references/optimization.md](references/optimization.md)
+- **Error Handling** — bounds checking, validation patterns → [references/error-handling.md](references/error-handling.md)
+
+## Best Practices
+
+- **Sprite/tilemap memory**: pre-allocate entity pools; batch stationary sprites; minimal tile updates per frame.
+- **SRAM limits (32KB)**: compact save structure, checksums for corruption detection, validate before loading.
+- **Fixed-point math**: GBA has no FPU — multiply by 256 for 8.8 format; avoid division.
+- **Bounded entity loops**: process only active entities; spatial partitioning for collisions; cap at 128 entities.
+- **Link cable**: packets under 11 bytes; drain `recv()` in a loop; handle disconnects gracefully.
 
 ## Troubleshooting
 
-- **Emulator vs hardware differences**: Test on real hardware because mGBA timing differs from actual GBA clock rates, causing race conditions in fast games.
-- **Sprite flickering (too many sprites per scanline)**: Redistribute sprites vertically because GBA hardware limits ~10 sprites per scanline; excess sprites blink on/off.
-- **Audio channel conflicts**: Prioritize player-hurt sounds at priority 95+ because only 3 SFX channels exist; lower-priority sounds drop silently.
-- **Save data corruption**: Write to temp offset then commit because power loss mid-write leaves partial data; atomic writes prevent torn state.
-- **Link cable desync**: Implement sequence numbers in packets because recv() queue reordering causes state rollback when packets arrive out of order.
+- **Emulator vs hardware**: mGBA is accurate but timing may differ; verify on real hardware before shipping.
+- **Sprite flickering**: 128 sprite slots but only ~10 visible per scanline — distribute sprites vertically.
+- **Audio channel conflicts**: 3 sound channels + 1 music; use the `priority` parameter.
+- **Save corruption**: always write checksums; verify the marker byte (0x42) before loading; atomic writes (temp, then commit).
 
 ## References
 
@@ -168,4 +239,3 @@ ffmpeg -i input.mp3 -ar 16000 -ac 1 -f s8 output.raw
 - [Tonc GBA Tutorial](https://www.coranac.com/tonc/text/)
 - [GBA Programming Wiki](https://gbadev.net/)
 - [mGBA Emulator](https://mgba.io/)
-
